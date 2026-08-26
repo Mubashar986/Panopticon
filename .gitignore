@@ -1,0 +1,102 @@
+# ==============================================================================
+# Panopticon .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# AI Agent Instructions & Operating State (Requested)
+# ------------------------------------------------------------------------------
+.agents/
+AGENTS.md
+GEMINI.md
+
+# ------------------------------------------------------------------------------
+# Google API Credentials, OAuth Tokens & Secrets (STRICT - NO COMMITS)
+# ------------------------------------------------------------------------------
+credentials.json
+token.json
+token.pickle
+service_account.json
+*.pem
+*.key
+*.p12
+
+# Environment files (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ------------------------------------------------------------------------------
+# Python & Virtual Environments
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Linters
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Local Persistence / Database
+*.sqlite
+*.sqlite3
+*.db
+data/
+crawl_cache/
+
+# ------------------------------------------------------------------------------
+# Meilisearch Local Data
+# ------------------------------------------------------------------------------
+data.ms/
+meili_data/
+
+# ------------------------------------------------------------------------------
+# Node.js / React Frontend
+# ------------------------------------------------------------------------------
+node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ------------------------------------------------------------------------------
+# Operating System & IDE Scratch
+# ------------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
