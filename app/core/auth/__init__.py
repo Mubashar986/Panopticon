@@ -1,6 +1,7 @@
 """Panopticon Google Drive Authentication Package."""
 
 from app.core.auth.base import DEFAULT_DRIVE_SCOPES, DriveAuthProvider
+from app.core.auth.client import build_drive_service
 from app.core.auth.exceptions import (
     AuthConfigurationError,
     AuthError,
@@ -30,5 +31,6 @@ __all__ = [
     "MissingServiceAccountFileError",
     "PersonalOAuthProvider",
     "TokenRefreshError",
+    "build_drive_service",
     "get_auth_provider",
 ]

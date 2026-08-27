@@ -151,7 +151,7 @@ graph TD
 - **Estimated time:** 30 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Script prints file names from your own Drive
+  - [x] Script prints file names from your own Drive
 - **Verification idea:** Run it and check output against your real Drive contents
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
