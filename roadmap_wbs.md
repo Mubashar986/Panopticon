@@ -165,8 +165,8 @@ graph TD
 - **Estimated time:** 90 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Returns every Doc/Sheet visible to the account across a multi-page test folder
-  - [ ] No duplicates, no missed pages
+  - [x] Returns every Doc/Sheet visible to the account across a multi-page test folder
+  - [x] No duplicates, no missed pages
 - **Verification idea:** Compare crawl output count against Drive UI file count
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -437,9 +437,9 @@ graph TD
 |---------|--------|---------|------------|-------|
 | 1.1 | Yes | None | `concept-to-code-bridge` | Start here |
 | 1.2 | Yes | None | `concept-to-code-bridge` | No external blocker anymore — this is the key architectural task, start early |
-| 1.3 | No | Needs 1.1, 1.2 | `concept-to-code-bridge` | |
-| 2.1 | No | Needs 1.3 | `concept-to-code-bridge` | |
-| 2.2-2.4 | No | Needs 2.1 | `concept-to-code-bridge` | Any order once 2.1 is done |
+| 1.3 | Done | None | `concept-to-code-bridge` | Smoke test passed |
+| 2.1 | Done | None | `concept-to-code-bridge` | Drive crawler built & verified (42/42 tests pass) |
+| 2.2-2.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.1 complete |
 | 2.5 | No | Needs 2.2, 2.3, 2.4 | `concept-to-code-bridge` | |
 | 3.1 | Yes | None | `concept-to-code-bridge` | Can start immediately, in parallel |
 | 3.2 | No | Needs 3.1 | `concept-to-code-bridge` | |
