@@ -46,7 +46,7 @@ def format_timestamp(iso_str: str | None) -> str:
         return iso_str[:16]
 
 
-def run_smoke_test(page_size: int = 10) -> int:
+def run_smoke_test(page_size: int = 50) -> int:
     """Execute live Google Drive API files.list query and render diagnostic report."""
     settings = get_settings()
     setup_logging(settings.LOG_LEVEL)
