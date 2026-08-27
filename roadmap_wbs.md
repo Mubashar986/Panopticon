@@ -120,8 +120,8 @@ graph TD
 - **Estimated time:** 30 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Entrypoint runs without error
-  - [ ] Dependency file committed
+  - [x] Entrypoint runs without error
+  - [x] Dependency file committed
 - **Verification idea:** Run the skeleton locally
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
