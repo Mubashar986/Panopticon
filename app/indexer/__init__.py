@@ -5,6 +5,11 @@ from app.indexer.crawler import (
     DEFAULT_DRIVE_FIELDS,
     DriveCrawler,
 )
+from app.indexer.exporter import (
+    ContentExporter,
+    ExportResult,
+    ExportStatus,
+)
 from app.indexer.labels import (
     DriveLabel,
     DriveLabelField,
@@ -24,11 +29,14 @@ __all__ = [
     "DEFAULT_DRIVE_FIELDS",
     "GOOGLE_DOC_MIME_TYPE",
     "GOOGLE_SHEET_MIME_TYPE",
+    "ContentExporter",
     "CrawlStats",
     "DriveCrawler",
     "DriveFileMetadata",
     "DriveLabel",
     "DriveLabelField",
+    "ExportResult",
+    "ExportStatus",
     "LabelExtractor",
     "build_label_query",
     "sanitize_string",

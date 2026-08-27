@@ -191,8 +191,8 @@ graph TD
 - **Estimated time:** 75 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Text extracted correctly for a normal-size Doc and Sheet
-  - [ ] A deliberately oversized test file is caught and flagged, not crashed on
+  - [x] Text extracted correctly for a normal-size Doc and Sheet
+  - [x] A deliberately oversized test file is caught and flagged, not crashed on
 - **Verification idea:** Create one intentionally huge test Sheet to trigger the cap
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -440,7 +440,8 @@ graph TD
 | 1.3 | Done | None | `concept-to-code-bridge` | Smoke test passed |
 | 2.1 | Done | None | `concept-to-code-bridge` | Drive crawler built & verified (42/42 tests pass) |
 | 2.2 | Done | None | `concept-to-code-bridge` | Label query & tag extraction built & verified (51/51 tests pass) |
-| 2.3-2.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.1 & 2.2 complete |
+| 2.3 | Done | None | `concept-to-code-bridge` | Content exporter with 10MB cap handling built & verified (61/61 tests pass) |
+| 2.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.1-2.3 complete |
 | 2.5 | No | Needs 2.2, 2.3, 2.4 | `concept-to-code-bridge` | |
 | 3.1 | Yes | None | `concept-to-code-bridge` | Can start immediately, in parallel |
 | 3.2 | No | Needs 3.1 | `concept-to-code-bridge` | |

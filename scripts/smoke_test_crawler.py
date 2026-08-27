@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.core.auth.factory import get_auth_provider
 from app.core.logging import get_logger
 from app.indexer.crawler import DriveCrawler
+from app.indexer.exporter import ContentExporter
 
 logger = get_logger("panopticon.scripts.smoke_crawler")
 
@@ -50,6 +51,13 @@ def main() -> int:
             for idx, f in enumerate(files[:10], start=1):
                 type_badge = "[DOC]" if f.is_doc else ("[SHEET]" if f.is_sheet else "[FILE]")
                 print(f"  {idx:2d}. {type_badge} {f.name} (ID: {f.id}, Owner: {f.primary_owner})")
+
+            print("\n[*] Testing live ContentExporter on first 3 files...")
+            exporter = ContentExporter(provider=provider, max_snippet_chars=120)
+            for idx, f in enumerate(files[:3], start=1):
+                res = exporter.export_file_content(f.id, f.mime_type)
+                snip_display = (res.snippet or "").replace("\n", " ")[:80]
+                print(f"   [{idx}] Status: {res.status} | Snippet: \"{snip_display}...\"")
         else:
             print("\n [INFO] No Google Docs or Sheets found matching the query.")
 

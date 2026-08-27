@@ -127,6 +127,14 @@ class DriveFileMetadata(BaseModel):
         default_factory=list,
         description="Flattened list of project tags extracted from labels",
     )
+    content_snippet: str | None = Field(
+        default=None,
+        description="Truncated search preview snippet of document content",
+    )
+    export_status: str | None = Field(
+        default=None,
+        description="Outcome status of content export (e.g. success, oversized_metadata_only)",
+    )
 
     @field_validator(
         "id",
@@ -136,6 +144,8 @@ class DriveFileMetadata(BaseModel):
         "web_view_link",
         "icon_link",
         "drive_id",
+        "content_snippet",
+        "export_status",
         mode="before",
     )
     @classmethod
