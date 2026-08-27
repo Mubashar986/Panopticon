@@ -1,8 +1,9 @@
 """Central Application Settings & Environment Configuration."""
 
 from functools import lru_cache
-import os
+from pathlib import Path
 from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +39,26 @@ class Settings(BaseSettings):
 
     # Local Persistence
     CRAWL_DB_PATH: str = "data/crawl_state.db"
+
+    @property
+    def credentials_path(self) -> Path:
+        """Resolved Path to OAuth client secrets file."""
+        return Path(self.GOOGLE_CLIENT_SECRETS_FILE).resolve()
+
+    @property
+    def token_cache_path(self) -> Path:
+        """Resolved Path to OAuth token cache file."""
+        return Path(self.GOOGLE_TOKEN_CACHE_FILE).resolve()
+
+    @property
+    def service_account_path(self) -> Path:
+        """Resolved Path to Service Account JSON key file."""
+        return Path(self.GOOGLE_SERVICE_ACCOUNT_FILE).resolve()
+
+    @property
+    def crawl_database_path(self) -> Path:
+        """Resolved Path to local SQLite crawl state database."""
+        return Path(self.CRAWL_DB_PATH).resolve()
 
 
 @lru_cache

@@ -136,10 +136,10 @@ graph TD
 - **Estimated time:** 75-90 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Crawler/indexer code only ever calls `auth_provider.get_credentials()` — zero OAuth or Service Account specifics outside providers.
-  - [ ] `PersonalOAuthProvider` authenticates personal account via browser consent and caches refresh token.
-  - [ ] `DomainWideDelegationProvider` loads service account JSON and supports delegated subject email impersonation.
-  - [ ] `get_auth_provider()` factory correctly reads `DRIVE_AUTH_MODE` from environment.
+  - [x] Crawler/indexer code only ever calls `auth_provider.get_credentials()` — zero OAuth or Service Account specifics outside providers.
+  - [x] `PersonalOAuthProvider` authenticates personal account via browser consent and caches refresh token.
+  - [x] `DomainWideDelegationProvider` loads service account JSON and supports delegated subject email impersonation.
+  - [x] `get_auth_provider()` factory correctly reads `DRIVE_AUTH_MODE` from environment.
 - **Verification idea:** Test both providers against unit tests / mock credentials.
 - **Next lifecycle skill:** `concept-to-code-bridge`
 

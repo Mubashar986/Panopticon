@@ -1,6 +1,7 @@
 """Pytest global fixtures and test configuration."""
 
 import pytest
+
 from app.core.config import Settings, get_settings
 
 

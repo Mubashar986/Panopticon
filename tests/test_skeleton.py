@@ -1,8 +1,7 @@
 """Smoke verification tests for Panopticon skeleton."""
 
-import pytest
 from app import __version__
-from app.core.config import Settings, get_settings
+from app.core.config import Settings
 from app.core.logging import get_logger, setup_logging
 from app.main import get_app_info, main
 
