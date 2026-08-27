@@ -1,4 +1,4 @@
-"""Google Drive Recursive Multi-Page Crawler with Shared Drive Support."""
+"""Google Drive Recursive Multi-Page Crawler with Shared Drive & Label Support."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from app.core.auth.exceptions import (
     DriveRateLimitError,
 )
 from app.core.logging import get_logger
+from app.indexer.labels import LabelExtractor
 from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
     GOOGLE_SHEET_MIME_TYPE,
@@ -36,7 +37,7 @@ DEFAULT_DOCS_SHEETS_QUERY = (
 # Explicit field projection to optimize bandwidth and memory
 DEFAULT_DRIVE_FIELDS = (
     "nextPageToken, files(id, name, mimeType, modifiedTime, createdTime, "
-    "owners, lastModifyingUser, shared, webViewLink, iconLink, size, trashed, parents, driveId)"
+    "owners, lastModifyingUser, shared, webViewLink, iconLink, size, trashed, parents, driveId, labelInfo)"
 )
 
 
@@ -99,6 +100,7 @@ class DriveCrawler:
         query_filter: str | None = None,
         page_size: int = 100,
         max_pages: int | None = None,
+        include_labels: list[str] | str | None = None,
     ) -> Iterator[DriveFileMetadata]:
         """Stream sanitized file metadata across all visible drives using cursor pagination.
 
@@ -106,6 +108,7 @@ class DriveCrawler:
             query_filter: Optional custom Drive search query. If None, defaults to Docs + Sheets.
             page_size: Number of items per page (1 to 1000, default 100).
             max_pages: Optional upper bound on pages to fetch (useful for testing/bounds).
+            include_labels: Optional label IDs to request from Google Drive API.
 
         Yields:
             DriveFileMetadata: Normalized domain object for each discovered file.
@@ -140,6 +143,10 @@ class DriveCrawler:
                 "includeItemsFromAllDrives": True,
                 "corpora": "allDrives",
             }
+            if include_labels:
+                request_kwargs["includeLabels"] = (
+                    ",".join(include_labels) if isinstance(include_labels, list) else include_labels
+                )
             if page_token is not None:
                 request_kwargs["pageToken"] = page_token
 
@@ -165,6 +172,7 @@ class DriveCrawler:
 
             for raw_file in raw_files:
                 try:
+                    labels, project_tags = LabelExtractor.extract_labels(raw_file.get("labelInfo"))
                     metadata = DriveFileMetadata(
                         id=raw_file.get("id", ""),
                         name=raw_file.get("name", "Untitled"),
@@ -185,6 +193,8 @@ class DriveCrawler:
                         trashed=raw_file.get("trashed", False),
                         parents=raw_file.get("parents", []),
                         drive_id=raw_file.get("driveId"),
+                        labels=labels,
+                        project_tags=project_tags,
                     )
                     yield metadata
                 except (ValueError, TypeError, KeyError, ValidationError) as parse_err:
@@ -223,6 +233,7 @@ class DriveCrawler:
         query_filter: str | None = None,
         page_size: int = 100,
         max_pages: int | None = None,
+        include_labels: list[str] | str | None = None,
     ) -> list[DriveFileMetadata]:
         """Eagerly fetch and return all discovered file metadata as a list.
 
@@ -230,6 +241,7 @@ class DriveCrawler:
             query_filter: Optional custom Drive search query.
             page_size: Number of items per page.
             max_pages: Optional maximum number of pages.
+            include_labels: Optional label IDs to request.
 
         Returns:
             list[DriveFileMetadata]: All discovered files.
@@ -239,6 +251,7 @@ class DriveCrawler:
                 query_filter=query_filter,
                 page_size=page_size,
                 max_pages=max_pages,
+                include_labels=include_labels,
             )
         )
 
@@ -247,6 +260,7 @@ class DriveCrawler:
         query_filter: str | None = None,
         page_size: int = 100,
         max_pages: int | None = None,
+        include_labels: list[str] | str | None = None,
     ) -> tuple[list[DriveFileMetadata], CrawlStats]:
         """Execute crawl and return both discovered files and detailed execution telemetry.
 
@@ -265,6 +279,7 @@ class DriveCrawler:
             query_filter=query_filter,
             page_size=page_size,
             max_pages=max_pages,
+            include_labels=include_labels,
         ):
             files.append(item)
             if item.is_doc:

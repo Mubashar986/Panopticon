@@ -1,4 +1,4 @@
-"""Domain models for Google Drive file metadata and crawl telemetry."""
+"""Domain models for Google Drive file metadata, labels, and crawl telemetry."""
 
 from __future__ import annotations
 
@@ -29,6 +29,52 @@ def sanitize_string(val: str | None) -> str | None:
         return None
     cleaned = _CONTROL_CHAR_REGEX.sub("", val).strip()
     return cleaned
+
+
+class DriveLabelField(BaseModel):
+    """Normalized field value within a Google Drive Label."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(..., description="Unique field ID within the label schema")
+    field_type: str = Field(
+        default="text",
+        description="Field data type (text, selection, user, integer, dateString)",
+    )
+    values: list[str] = Field(
+        default_factory=list, description="Extracted string values for this field"
+    )
+    display_value: str | None = Field(
+        default=None, description="Primary human-readable display string"
+    )
+
+
+class DriveLabel(BaseModel):
+    """Normalized Google Drive Workspace Label attached to a file."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(..., description="Unique Google Drive Label ID")
+    revision_id: str | None = Field(
+        default=None, description="Label schema revision ID if present"
+    )
+    fields: dict[str, DriveLabelField] = Field(
+        default_factory=dict, description="Map of field ID to DriveLabelField"
+    )
+
+    def get_field_values(self, field_id: str) -> list[str]:
+        """Return list of string values for a specific field ID."""
+        field = self.fields.get(field_id)
+        if field:
+            return field.values
+        return []
+
+    def get_field_display(self, field_id: str) -> str | None:
+        """Return display string for a specific field ID."""
+        field = self.fields.get(field_id)
+        if field:
+            return field.display_value
+        return None
 
 
 class DriveFileMetadata(BaseModel):
@@ -73,6 +119,14 @@ class DriveFileMetadata(BaseModel):
     drive_id: str | None = Field(
         default=None, description="ID of the Shared Drive containing this file"
     )
+    labels: list[DriveLabel] = Field(
+        default_factory=list,
+        description="Structured Google Drive Workspace Labels attached to this file",
+    )
+    project_tags: list[str] = Field(
+        default_factory=list,
+        description="Flattened list of project tags extracted from labels",
+    )
 
     @field_validator(
         "id",
@@ -91,7 +145,7 @@ class DriveFileMetadata(BaseModel):
             return sanitize_string(v)
         return v
 
-    @field_validator("owners", "parents", mode="before")
+    @field_validator("owners", "parents", "project_tags", mode="before")
     @classmethod
     def clean_string_lists(cls, v: Any) -> Any:
         """Sanitize list of string values."""
@@ -129,6 +183,11 @@ class DriveFileMetadata(BaseModel):
         if self.owners:
             return self.owners[0]
         return "Shared Drive / Organization"
+
+    def has_project_tag(self, tag: str) -> bool:
+        """Check if this file is tagged with a given project name (case-insensitive)."""
+        target = tag.strip().lower()
+        return any(t.lower() == target for t in self.project_tags)
 
 
 class CrawlStats(BaseModel):

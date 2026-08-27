@@ -178,8 +178,8 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Correctly reads a manually-tagged test file's label
-  - [ ] Returns cleanly (no crash) for untagged files
+  - [x] Correctly reads a manually-tagged test file's label
+  - [x] Returns cleanly (no crash) for untagged files
 - **Verification idea:** Tag one test file manually, confirm the script reads it back
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -439,7 +439,8 @@ graph TD
 | 1.2 | Yes | None | `concept-to-code-bridge` | No external blocker anymore — this is the key architectural task, start early |
 | 1.3 | Done | None | `concept-to-code-bridge` | Smoke test passed |
 | 2.1 | Done | None | `concept-to-code-bridge` | Drive crawler built & verified (42/42 tests pass) |
-| 2.2-2.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.1 complete |
+| 2.2 | Done | None | `concept-to-code-bridge` | Label query & tag extraction built & verified (51/51 tests pass) |
+| 2.3-2.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.1 & 2.2 complete |
 | 2.5 | No | Needs 2.2, 2.3, 2.4 | `concept-to-code-bridge` | |
 | 3.1 | Yes | None | `concept-to-code-bridge` | Can start immediately, in parallel |
 | 3.2 | No | Needs 3.1 | `concept-to-code-bridge` | |
