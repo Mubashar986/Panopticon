@@ -21,8 +21,11 @@ from app.indexer.models import (
     GOOGLE_SHEET_MIME_TYPE,
     CrawlStats,
     DriveFileMetadata,
+    DrivePermission,
+    SharingStatus,
     sanitize_string,
 )
+from app.indexer.permissions import PermissionClassifier
 
 __all__ = [
     "DEFAULT_DOCS_SHEETS_QUERY",
@@ -35,9 +38,12 @@ __all__ = [
     "DriveFileMetadata",
     "DriveLabel",
     "DriveLabelField",
+    "DrivePermission",
     "ExportResult",
     "ExportStatus",
     "LabelExtractor",
+    "PermissionClassifier",
+    "SharingStatus",
     "build_label_query",
     "sanitize_string",
 ]

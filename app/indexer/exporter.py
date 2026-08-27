@@ -140,7 +140,8 @@ class ContentExporter:
             # Decode UTF-8 defensively, replacing corrupt bytes
             decoded_str = raw_bytes.decode("utf-8", errors="replace")
             cleaned_text = sanitize_string(decoded_str) or ""
-            snippet = cleaned_text[: self.max_snippet_chars].strip()
+            # Collapse raw carriage returns and newlines for clean search snippets
+            snippet = " ".join(cleaned_text[: self.max_snippet_chars].split())
 
             return ExportResult(
                 file_id=file_id,

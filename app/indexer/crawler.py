@@ -1,4 +1,4 @@
-"""Google Drive Recursive Multi-Page Crawler with Shared Drive & Label Support."""
+"""Google Drive Recursive Multi-Page Crawler with Shared Drive, Permissions & Label Support."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from app.indexer.models import (
     CrawlStats,
     DriveFileMetadata,
 )
+from app.indexer.permissions import PermissionClassifier
 
 logger = get_logger("panopticon.indexer.crawler")
 
@@ -37,7 +38,9 @@ DEFAULT_DOCS_SHEETS_QUERY = (
 # Explicit field projection to optimize bandwidth and memory
 DEFAULT_DRIVE_FIELDS = (
     "nextPageToken, files(id, name, mimeType, modifiedTime, createdTime, "
-    "owners, lastModifyingUser, shared, webViewLink, iconLink, size, trashed, parents, driveId, labelInfo)"
+    "owners, lastModifyingUser, shared, "
+    "permissions(id, role, type, emailAddress, domain, displayName, allowFileDiscovery), "
+    "webViewLink, iconLink, size, trashed, parents, driveId, labelInfo)"
 )
 
 
@@ -173,6 +176,14 @@ class DriveCrawler:
             for raw_file in raw_files:
                 try:
                     labels, project_tags = LabelExtractor.extract_labels(raw_file.get("labelInfo"))
+                    raw_perms = raw_file.get("permissions")
+                    parsed_perms = PermissionClassifier.parse_permissions(raw_perms)
+                    sharing_status = PermissionClassifier.classify_sharing_status(
+                        shared=raw_file.get("shared", False),
+                        permissions=parsed_perms,
+                        drive_id=raw_file.get("driveId"),
+                    )
+
                     metadata = DriveFileMetadata(
                         id=raw_file.get("id", ""),
                         name=raw_file.get("name", "Untitled"),
@@ -193,6 +204,8 @@ class DriveCrawler:
                         trashed=raw_file.get("trashed", False),
                         parents=raw_file.get("parents", []),
                         drive_id=raw_file.get("driveId"),
+                        permissions=parsed_perms,
+                        sharing_status=sharing_status,
                         labels=labels,
                         project_tags=project_tags,
                     )

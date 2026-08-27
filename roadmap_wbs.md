@@ -204,7 +204,7 @@ graph TD
 - **Estimated time:** 30 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Sharing status correctly distinguishes private/shared/domain-wide on test files
+  - [x] Sharing status correctly distinguishes private/shared/domain-wide on test files
 - **Verification idea:** Test against one file of each sharing type
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -441,8 +441,8 @@ graph TD
 | 2.1 | Done | None | `concept-to-code-bridge` | Drive crawler built & verified (42/42 tests pass) |
 | 2.2 | Done | None | `concept-to-code-bridge` | Label query & tag extraction built & verified (51/51 tests pass) |
 | 2.3 | Done | None | `concept-to-code-bridge` | Content exporter with 10MB cap handling built & verified (61/61 tests pass) |
-| 2.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.1-2.3 complete |
-| 2.5 | No | Needs 2.2, 2.3, 2.4 | `concept-to-code-bridge` | |
+| 2.4 | Done | None | `concept-to-code-bridge` | Permissions & sharing status built & verified (70/70 tests pass) |
+| 2.5 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.2, 2.3, 2.4 complete |
 | 3.1 | Yes | None | `concept-to-code-bridge` | Can start immediately, in parallel |
 | 3.2 | No | Needs 3.1 | `concept-to-code-bridge` | |
 | 3.3 | No | Needs 2.5, 3.2 | `concept-to-code-bridge` | |

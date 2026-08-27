@@ -50,7 +50,8 @@ def main() -> int:
             print("\n Discovered Files Preview (First 10):")
             for idx, f in enumerate(files[:10], start=1):
                 type_badge = "[DOC]" if f.is_doc else ("[SHEET]" if f.is_sheet else "[FILE]")
-                print(f"  {idx:2d}. {type_badge} {f.name} (ID: {f.id}, Owner: {f.primary_owner})")
+                status_badge = f"[{f.sharing_status.upper()}]"
+                print(f"  {idx:2d}. {type_badge} {status_badge:<9} {f.name} (Owner: {f.primary_owner})")
 
             print("\n[*] Testing live ContentExporter on first 3 files...")
             exporter = ContentExporter(provider=provider, max_snippet_chars=120)
