@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
+
 import pytest
 
 from app.indexer.models import GOOGLE_DOC_MIME_TYPE, GOOGLE_SHEET_MIME_TYPE, DriveFileMetadata
 from app.indexer.storage import CrawlStorage
-from app.search.exceptions import IndexConfigurationError, SearchConnectionError, SearchError
+from app.search.exceptions import IndexConfigurationError, SearchConnectionError
 from app.search.ingestion import IngestionResult, SearchIngestionEngine
 from app.search.models import IndexStats
-from app.search.schema import SearchDocument
 
 
 def test_ingest_documents_empty() -> None:

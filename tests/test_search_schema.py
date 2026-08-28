@@ -4,16 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
+
 import pytest
 
 from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
     GOOGLE_SHEET_MIME_TYPE,
     DriveFileMetadata,
-    DrivePermission,
 )
 from app.search.client import PanopticonSearchClient
-from app.search.exceptions import IndexConfigurationError, SearchConnectionError, SearchError
+from app.search.exceptions import IndexConfigurationError, SearchConnectionError
 from app.search.schema import (
     INDEX_SETTINGS,
     SearchDocument,

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
+
 from app.indexer.models import DriveFileMetadata
 from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.search.client import PanopticonSearchClient, get_search_client
@@ -105,15 +107,13 @@ class SearchIngestionEngine:
                 for task_uid in task_uids:
                     task_result = raw_client.wait_for_task(task_uid)
                     status = (
-                        task_result.status
-                        if hasattr(task_result, "status")
-                        else task_result.get("status")
+                        getattr(task_result, "status", None)
+                        or (task_result.get("status") if isinstance(task_result, dict) else None)
                     )
                     if status == "failed":
                         error = (
-                            task_result.error
-                            if hasattr(task_result, "error")
-                            else task_result.get("error", "Unknown error")
+                            getattr(task_result, "error", None)
+                            or (task_result.get("error") if isinstance(task_result, dict) else "Unknown error")
                         )
                         raise IndexConfigurationError(
                             f"Meilisearch indexing task {task_uid} failed: {error}"
@@ -247,7 +247,7 @@ class SearchIngestionEngine:
                     deleted_count = self.delete_documents_by_ids(
                         orphaned_ids, index_name=target_uid, wait_for_task=True
                     )
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 logger.warning("Could not execute ghost document purge: %s", e)
 
         stats = self.search_client.get_stats(target_uid)

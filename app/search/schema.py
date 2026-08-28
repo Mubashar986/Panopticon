@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from app.search.exceptions import IndexConfigurationError, SearchConnectionError, SearchError
 from app.search.models import SearchDocument
@@ -103,7 +103,7 @@ def configure_index_schema(
             target_uid = index_name or "panopticon_docs"
             try:
                 index = raw_client.get_index(target_uid)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 task = raw_client.create_index(target_uid, {"primaryKey": "id"})
                 raw_client.wait_for_task(task.task_uid)
                 index = raw_client.get_index(target_uid)
@@ -131,7 +131,7 @@ def configure_index_schema(
 
         current_settings = index.get_settings()
         logger.info("Schema settings successfully verified on '%s'.", index.uid)
-        return current_settings
+        return cast(dict[str, Any], current_settings)
 
     except (IndexConfigurationError, SearchConnectionError, SearchError):
         raise
@@ -155,7 +155,7 @@ def get_index_schema(client: Any, index_name: str | None = None) -> dict[str, An
             target_uid = index_name or "panopticon_docs"
 
         index = raw_client.index(target_uid)
-        return index.get_settings()
+        return cast(dict[str, Any], index.get_settings())
     except Exception as exc:
         raise SearchError(f"Failed fetching index schema: {exc}") from exc
 

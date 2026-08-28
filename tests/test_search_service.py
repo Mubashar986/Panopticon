@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from unittest.mock import MagicMock
+
 import pytest
 
 from app.search.client import PanopticonSearchClient
-from app.search.exceptions import IndexNotFoundError, SearchConnectionError, SearchError
-from app.search.service import SearchHit, SearchResult, SearchService
+from app.search.exceptions import IndexNotFoundError, SearchConnectionError
+from app.search.service import SearchService
 
 
 def test_search_service_typo_tolerance() -> None:

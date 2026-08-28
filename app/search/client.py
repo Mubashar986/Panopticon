@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+
 import meilisearch
 from meilisearch.errors import (
     MeilisearchApiError,
     MeilisearchCommunicationError,
-    MeilisearchError,
-    MeilisearchTimeoutError,
 )
 
 from app.core.config import Settings, get_settings
@@ -33,7 +32,7 @@ class PanopticonSearchClient:
         url: str | None = None,
         api_key: str | None = None,
         index_name: str | None = None,
-        timeout: int | float | None = 5,
+        timeout: int | None = 5,
     ) -> None:
         settings: Settings = get_settings()
         self.url = (url or settings.MEILI_HOST).rstrip("/")
@@ -66,7 +65,7 @@ class PanopticonSearchClient:
             try:
                 ver = self._client.get_version()
                 version_str = ver.get("pkgVersion") if isinstance(ver, dict) else getattr(ver, "pkg_version", None)
-            except Exception as ver_err:
+            except Exception as ver_err:  # noqa: BLE001
                 logger.debug("Could not retrieve Meilisearch version: %s", ver_err)
 
             return MeiliHealthStatus(
@@ -94,7 +93,7 @@ class PanopticonSearchClient:
                 version=None,
                 error_message=f"API Error ({api_err.status_code}): {api_err.message}",
             )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             logger.warning("Unexpected error checking Meilisearch health: %s", exc)
             return MeiliHealthStatus(
                 is_available=False,
@@ -103,6 +102,14 @@ class PanopticonSearchClient:
                 version=None,
                 error_message=str(exc),
             )
+
+    def health_check(self) -> MeiliHealthStatus:
+        """Check Meilisearch server connectivity and health (alias for check_health)."""
+        return self.check_health()
+
+    def get_index_stats(self, index_uid: str | None = None) -> IndexStats:
+        """Fetch index statistics (alias for get_stats)."""
+        return self.get_stats(index_uid)
 
     def is_healthy(self) -> bool:
         """Return True if Meilisearch instance is reachable and healthy."""
@@ -170,7 +177,7 @@ class PanopticonSearchClient:
             
             # Normalize FieldDistribution model / dict to plain dictionary
             if hasattr(raw_field_dist, "_FieldDistribution__dict"):
-                field_dist = dict(getattr(raw_field_dist, "_FieldDistribution__dict"))
+                field_dist = dict(raw_field_dist._FieldDistribution__dict)
             elif hasattr(raw_field_dist, "__dict__"):
                 field_dist = {k: v for k, v in raw_field_dist.__dict__.items() if not k.startswith("_")}
             elif isinstance(raw_field_dist, dict):

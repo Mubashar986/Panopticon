@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.indexer.models import GOOGLE_DOC_MIME_TYPE, GOOGLE_SHEET_MIME_TYPE, DriveFileMetadata
@@ -208,13 +209,13 @@ class SearchResult(BaseModel):
 
 
 __all__ = [
-    "MeiliVersionInfo",
-    "MeiliHealthStatus",
+    "ConfidenceLevel",
     "IndexStats",
-    "SearchDocument",
     "IngestionResult",
     "MatchSource",
-    "ConfidenceLevel",
+    "MeiliHealthStatus",
+    "MeiliVersionInfo",
+    "SearchDocument",
     "SearchHit",
     "SearchResult",
 ]

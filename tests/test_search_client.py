@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
 import pytest
 from meilisearch.errors import (
     MeilisearchApiError,
@@ -11,11 +12,8 @@ from meilisearch.errors import (
 
 from app.search.client import PanopticonSearchClient, get_search_client
 from app.search.exceptions import (
-    IndexConfigurationError,
     IndexNotFoundError,
-    SearchAuthError,
     SearchConnectionError,
-    SearchError,
 )
 from app.search.models import IndexStats, MeiliHealthStatus, MeiliVersionInfo
 

@@ -282,7 +282,7 @@ graph TD
 - **Estimated time:** 30 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] `/health` returns 200 locally
+  - [x] `/health` returns 200 locally
 - **Verification idea:** Hit it with curl
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -294,7 +294,7 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Response matches the documented shape (id, name, type, owner, matchedVia, sharedWith, snippet, viewUrl, exportLinks)
+  - [x] Response matches the documented shape (id, name, type, owner, matchedVia, sharedWith, snippet, viewUrl, exportLinks)
 - **Verification idea:** Compare a real response against `architecture.md`'s sample JSON
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -306,8 +306,8 @@ graph TD
 - **Estimated time:** 45 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Auth check is a single swappable dependency function, currently always passing locally
-  - [ ] Swapping in real auth later requires no changes to route handlers
+  - [x] Auth check is a single swappable dependency function, currently always passing locally
+  - [x] Swapping in real auth later requires no changes to route handlers
 - **Verification idea:** Confirm route handlers never reference auth details directly
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -447,12 +447,12 @@ graph TD
 | 3.2 | Done | None | `concept-to-code-bridge` | SearchDocument model, index schema & ranking rules built & verified (103/103 tests pass) |
 | 3.3 | Done | None | `concept-to-code-bridge` | SearchIngestionEngine, batch chunking & ghost deletion built & verified (110/110 tests pass) |
 | 3.4 | Done | None | `concept-to-code-bridge` | SearchService, typo tolerance & ranking rules built & verified (117/117 tests pass) |
-| 4.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
-| 4.2 | No | Needs 4.1 | `concept-to-code-bridge` | (3.4 is complete, waiting on 4.1) |
-| 4.3 | No | Needs 4.1 | `concept-to-code-bridge` | Stub only — real auth still an open question |
-| 5.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
-| 5.2 | No | Needs 5.1 | `concept-to-code-bridge` | |
-| 5.3 | No | Needs 4.2, 5.2 | `concept-to-code-bridge` | |
+| 4.1 | Done | None | `concept-to-code-bridge` | FastAPI app skeleton, CORS, health & system status built & verified (130/130 tests pass) |
+| 4.2 | Done | None | `concept-to-code-bridge` | GET /api/search endpoint with Meilisearch integration & facets verified |
+| 4.3 | Done | None | `concept-to-code-bridge` | Pluggable auth seam & dependency injection verified |
+| 5.1 | Yes | None | `picasso` / `vermeer` | Can start immediately |
+| 5.2 | No | Needs 5.1 | `vermeer` | |
+| 5.3 | No | Needs 4.2, 5.2 | `escher` / `vermeer` | (4.2 backend contract complete) |
 | 5.4 | No | Needs 4.3, 5.1 | `concept-to-code-bridge` | Placeholder only |
 | 5.5 | No | Needs 5.3 | `concept-to-code-bridge` | |
 | 6.1 | No | Needs 2.5, 3.4, 4.3, 5.4 | `testing-verification` | |

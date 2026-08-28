@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # API Server Config
     API_HOST: str = "127.0.0.1"
     API_PORT: int = 8000
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
 
     # Local Persistence
     CRAWL_DB_PATH: str = "data/crawl_state.db"
