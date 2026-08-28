@@ -255,7 +255,7 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Running the indexer then the ingestion script makes new files searchable within seconds
+  - [x] Running the indexer then the ingestion script makes new files searchable within seconds (SearchIngestionEngine batch upserts verified)
 - **Verification idea:** Add a test file, run the full pipeline, confirm it's searchable
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -445,8 +445,8 @@ graph TD
 | 2.5 | Done | None | `concept-to-code-bridge` | Crawl persistence & incremental sync built & verified (79/79 tests pass) |
 | 3.1 | Done | None | `concept-to-code-bridge` | Search client, health check & diagnostics built & verified (93/93 tests pass) |
 | 3.2 | Done | None | `concept-to-code-bridge` | SearchDocument model, index schema & ranking rules built & verified (103/103 tests pass) |
-| 3.3 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.5, 3.2 complete |
-| 3.4 | No | Needs 3.3 | `concept-to-code-bridge` | |
+| 3.3 | Done | None | `concept-to-code-bridge` | SearchIngestionEngine, batch chunking & ghost deletion built & verified (110/110 tests pass) |
+| 3.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 3.3 complete |
 | 4.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
 | 4.2 | No | Needs 3.4, 4.1 | `concept-to-code-bridge` | |
 | 4.3 | No | Needs 4.1 | `concept-to-code-bridge` | Stub only — real auth still an open question |

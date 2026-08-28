@@ -8,6 +8,7 @@ from app.search.exceptions import (
     SearchConnectionError,
     SearchError,
 )
+from app.search.ingestion import IngestionResult, SearchIngestionEngine
 from app.search.models import IndexStats, MeiliHealthStatus, MeiliVersionInfo, SearchDocument
 from app.search.schema import INDEX_SETTINGS, configure_index_schema, get_index_schema
 
@@ -26,4 +27,6 @@ __all__ = [
     "INDEX_SETTINGS",
     "configure_index_schema",
     "get_index_schema",
+    "SearchIngestionEngine",
+    "IngestionResult",
 ]

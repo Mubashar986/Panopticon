@@ -27,7 +27,7 @@ from app.indexer.models import (
     sanitize_string,
 )
 from app.indexer.permissions import PermissionClassifier
-from app.indexer.storage import CrawlStorage
+from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.indexer.sync import IncrementalSyncEngine
 
 __all__ = [
@@ -51,5 +51,6 @@ __all__ = [
     "SharingStatus",
     "SyncResult",
     "build_label_query",
+    "get_crawl_storage",
     "sanitize_string",
 ]

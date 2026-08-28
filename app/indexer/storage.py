@@ -346,6 +346,10 @@ class CrawlStorage:
             cursor = conn.execute(sql, params)
             return [self._row_to_model(row) for row in cursor.fetchall()]
 
+    def get_all_files(self) -> list[DriveFileMetadata]:
+        """Return all active file records currently in SQLite storage."""
+        return self.list_files()
+
     def delete_files(self, file_ids: list[str] | set[str]) -> int:
         """Permanently delete file records by ID list.
 
@@ -377,3 +381,8 @@ class CrawlStorage:
             )
             row = cursor.fetchone()
             return int(row["count"]) if row else 0
+
+
+def get_crawl_storage(db_path: str | Path | None = None) -> CrawlStorage:
+    """Factory helper returning an initialized CrawlStorage instance."""
+    return CrawlStorage(db_path=db_path)

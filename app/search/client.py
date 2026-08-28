@@ -161,18 +161,39 @@ class PanopticonSearchClient:
         try:
             index = self._client.get_index(uid)
             raw_stats = index.get_stats()
-            if isinstance(raw_stats, dict):
-                return IndexStats(
-                    index_uid=uid,
-                    is_indexing=raw_stats.get("isIndexing", False),
-                    number_of_documents=raw_stats.get("numberOfDocuments", 0),
-                    field_distribution=raw_stats.get("fieldDistribution", {}),
-                )
+            
+            raw_field_dist = (
+                raw_stats.get("fieldDistribution", {})
+                if isinstance(raw_stats, dict)
+                else getattr(raw_stats, "field_distribution", {})
+            )
+            
+            # Normalize FieldDistribution model / dict to plain dictionary
+            if hasattr(raw_field_dist, "_FieldDistribution__dict"):
+                field_dist = dict(getattr(raw_field_dist, "_FieldDistribution__dict"))
+            elif hasattr(raw_field_dist, "__dict__"):
+                field_dist = {k: v for k, v in raw_field_dist.__dict__.items() if not k.startswith("_")}
+            elif isinstance(raw_field_dist, dict):
+                field_dist = raw_field_dist
+            else:
+                field_dist = {}
+
+            is_indexing = (
+                raw_stats.get("isIndexing", False)
+                if isinstance(raw_stats, dict)
+                else getattr(raw_stats, "is_indexing", False)
+            )
+            doc_count = (
+                raw_stats.get("numberOfDocuments", 0)
+                if isinstance(raw_stats, dict)
+                else getattr(raw_stats, "number_of_documents", 0)
+            )
+
             return IndexStats(
                 index_uid=uid,
-                is_indexing=getattr(raw_stats, "is_indexing", False),
-                number_of_documents=getattr(raw_stats, "number_of_documents", 0),
-                field_distribution=getattr(raw_stats, "field_distribution", {}),
+                is_indexing=bool(is_indexing),
+                number_of_documents=int(doc_count),
+                field_distribution=field_dist,
             )
         except MeilisearchApiError as api_err:
             if api_err.status_code == 404:
