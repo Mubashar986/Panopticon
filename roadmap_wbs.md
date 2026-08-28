@@ -231,7 +231,7 @@ graph TD
 - **Estimated time:** 30 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Meilisearch health check responds locally
+  - [x] Meilisearch health check responds locally (adapter and health probing verified)
 - **Verification idea:** Hit its health endpoint
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -443,8 +443,8 @@ graph TD
 | 2.3 | Done | None | `concept-to-code-bridge` | Content exporter with 10MB cap handling built & verified (61/61 tests pass) |
 | 2.4 | Done | None | `concept-to-code-bridge` | Permissions & sharing status built & verified (70/70 tests pass) |
 | 2.5 | Done | None | `concept-to-code-bridge` | Crawl persistence & incremental sync built & verified (79/79 tests pass) |
-| 3.1 | Yes | None | `concept-to-code-bridge` | Can start immediately, in parallel |
-| 3.2 | No | Needs 3.1 | `concept-to-code-bridge` | |
+| 3.1 | Done | None | `concept-to-code-bridge` | Search client, health check & diagnostics built & verified (93/93 tests pass) |
+| 3.2 | Yes | None | `concept-to-code-bridge` | Ready to start; 3.1 complete |
 | 3.3 | No | Needs 2.5, 3.2 | `concept-to-code-bridge` | |
 | 3.4 | No | Needs 3.3 | `concept-to-code-bridge` | |
 | 4.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
