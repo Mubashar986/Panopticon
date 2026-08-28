@@ -14,9 +14,12 @@ from app.core.auth.base import DriveAuthProvider
 from app.core.auth.client import build_drive_service
 from app.core.auth.exceptions import (
     AuthError,
+    DriveConnectionError,
+    DriveNetworkError,
     DrivePermissionDeniedError,
     DriveQuotaExceededError,
     DriveRateLimitError,
+    DriveTimeoutError,
 )
 from app.core.logging import get_logger
 from app.indexer.labels import LabelExtractor
@@ -160,12 +163,18 @@ class DriveCrawler:
                     page_token,
                 )
                 request = self._service.files().list(**request_kwargs)
-                response = request.execute()
+                response = request.execute(num_retries=3)
             except HttpError as http_err:
                 _handle_http_error(http_err)
+            except TimeoutError as timeout_err:
+                logger.error("Socket timeout querying Google Drive API: %s", timeout_err)
+                raise DriveTimeoutError(f"Drive API request timed out: {timeout_err}") from timeout_err
+            except (ConnectionResetError, ConnectionError, OSError) as conn_err:
+                logger.error("Connection error querying Google Drive API: %s", conn_err)
+                raise DriveConnectionError(f"Drive API connection failed: {conn_err}") from conn_err
             except Exception as e:
                 logger.error("Unexpected error querying Google Drive API: %s", e)
-                raise AuthError(f"Drive API crawl failed: {e}") from e
+                raise DriveNetworkError(f"Drive API crawl failed: {e}") from e
 
             pages_fetched += 1
             raw_files: list[dict[str, Any]] = response.get("files", [])

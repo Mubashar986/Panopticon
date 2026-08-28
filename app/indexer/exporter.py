@@ -114,7 +114,7 @@ class ContentExporter:
                 fileId=file_id,
                 mimeType=target_mime,
             )
-            raw_bytes: bytes = request.execute()
+            raw_bytes: bytes = request.execute(num_retries=3)
 
             # Handle edge cases where returned payload is str instead of bytes
             if isinstance(raw_bytes, str):
@@ -189,11 +189,16 @@ class ContentExporter:
                 error_message=f"Export failed ({status_code}): {http_err._get_reason()}",
             )
 
-        except (ValueError, TypeError, OSError) as e:
-            logger.error("Unexpected error exporting content for file %s: %s", file_id, e)
+        except (TimeoutError, ConnectionResetError, ConnectionError, OSError, ValueError, TypeError) as e:
+            logger.warning(
+                "Network or processing error exporting content for file %s: %s (graceful fallback)",
+                file_id,
+                e,
+            )
             return ExportResult(
                 file_id=file_id,
                 status="failed_metadata_only",
+                snippet="[Export error: indexed by metadata only]",
                 error_message=f"Export error: {e}",
             )
 

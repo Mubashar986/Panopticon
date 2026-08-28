@@ -128,3 +128,26 @@ class DrivePermissionDeniedError(AuthError):
         details: str | None = None,
     ) -> None:
         super().__init__(message, details)
+
+
+class DriveNetworkError(Exception):
+    """Base exception for network, transport, or connection issues when communicating with Google Drive."""
+
+    def __init__(self, message: str, details: str | None = None) -> None:
+        super().__init__(message)
+        self.message = message
+        self.details = details
+
+    def __str__(self) -> str:
+        if self.details:
+            return f"{self.message}\nDetails: {self.details}"
+        return self.message
+
+
+class DriveTimeoutError(DriveNetworkError):
+    """Raised when Google Drive API HTTP socket read or connection times out."""
+
+
+class DriveConnectionError(DriveNetworkError):
+    """Raised when network connection to Google Drive API fails or is reset."""
+

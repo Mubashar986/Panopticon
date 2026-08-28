@@ -9,9 +9,11 @@ import pytest
 from googleapiclient.errors import HttpError
 
 from app.core.auth.exceptions import (
+    DriveConnectionError,
     DrivePermissionDeniedError,
     DriveQuotaExceededError,
     DriveRateLimitError,
+    DriveTimeoutError,
 )
 from app.indexer.crawler import (
     DEFAULT_DOCS_SHEETS_QUERY,
@@ -325,3 +327,27 @@ def test_crawler_crawl_with_stats() -> None:
     assert stats.other_count == 1
     assert stats.duration_seconds >= 0.0
     assert stats.end_time is not None
+
+
+def test_crawler_socket_timeout_remapping() -> None:
+    """Test remapping socket TimeoutError to DriveTimeoutError."""
+    mock_service = MagicMock()
+    mock_req = MagicMock()
+    mock_req.execute.side_effect = TimeoutError("The read operation timed out")
+    mock_service.files().list.return_value = mock_req
+
+    crawler = DriveCrawler(service=mock_service)
+    with pytest.raises(DriveTimeoutError):
+        crawler.crawl_all()
+
+
+def test_crawler_connection_error_remapping() -> None:
+    """Test remapping ConnectionResetError to DriveConnectionError."""
+    mock_service = MagicMock()
+    mock_req = MagicMock()
+    mock_req.execute.side_effect = ConnectionResetError("Connection reset by peer")
+    mock_service.files().list.return_value = mock_req
+
+    crawler = DriveCrawler(service=mock_service)
+    with pytest.raises(DriveConnectionError):
+        crawler.crawl_all()
