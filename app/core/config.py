@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     MEILI_HOST: str = "http://localhost:7700"
     MEILI_MASTER_KEY: str = "masterKey_panopticon_local_dev"
     MEILI_INDEX_NAME: str = "panopticon_docs"
+    MEILI_NO_ANALYTICS: bool = True
 
     # API Server Config
     API_HOST: str = "127.0.0.1"

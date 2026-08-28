@@ -29,10 +29,10 @@ def main() -> int:
         print(f"Details:  {health.error_message}")
         print("\nTo start Meilisearch locally:")
         print("Option A (Docker):")
-        print(f"  docker run -d -p 7700:7700 -v meili_data:/meili_data getmeili/meilisearch:v1.12")
+        print("  docker run -d -p 7700:7700 -e MEILI_NO_ANALYTICS=true -v meili_data:/meili_data getmeili/meilisearch:v1.12")
         print("\nOption B (Standalone Binary):")
-        print(f"  python scripts/download_meilisearch.py")
-        print(f"  .\\bin\\meilisearch.exe --db-path ./data/meili_data --master-key {client.api_key or 'devMasterKey'}")
+        print("  python scripts/download_meilisearch.py")
+        print(f"  .\\bin\\meilisearch.exe --db-path ./data/meili_data --master-key {client.api_key or 'devMasterKey'} --no-analytics")
         print("=" * 60)
         return 1
 
