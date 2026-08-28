@@ -1,9 +1,11 @@
-"""Data models for Meilisearch client, health checks, and stats."""
+"""Data models for Meilisearch client, health checks, stats, and search documents."""
 
 from __future__ import annotations
 
 from typing import Any
 from pydantic import BaseModel, Field
+
+from app.search.schema import SearchDocument
 
 
 class MeiliVersionInfo(BaseModel):
@@ -31,3 +33,11 @@ class IndexStats(BaseModel):
     is_indexing: bool = Field(default=False, description="True if background indexing task is running")
     number_of_documents: int = Field(default=0, description="Total indexed document count")
     field_distribution: dict[str, int] = Field(default_factory=dict, description="Field count distribution")
+
+
+__all__ = [
+    "SearchDocument",
+    "MeiliVersionInfo",
+    "MeiliHealthStatus",
+    "IndexStats",
+]

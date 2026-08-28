@@ -178,10 +178,23 @@ class PanopticonSearchClient:
             if api_err.status_code == 404:
                 raise IndexNotFoundError(f"Index '{uid}' not found") from api_err
             raise SearchError(f"Error fetching stats for index '{uid}': {api_err.message}") from api_err
-        except MeilisearchCommunicationError as comm_err:
-            raise SearchConnectionError(
-                f"Cannot connect to Meilisearch at {self.url}: {comm_err}"
-            ) from comm_err
+    def configure_schema(
+        self,
+        index_uid: str | None = None,
+        settings_dict: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Configure and apply schema, ranking rules, and facets to the index."""
+        from app.search.schema import configure_index_schema
+
+        uid = index_uid or self.index_name
+        return configure_index_schema(client=self, index_name=uid, settings_dict=settings_dict)
+
+    def get_schema_settings(self, index_uid: str | None = None) -> dict[str, Any]:
+        """Fetch active settings for the index."""
+        from app.search.schema import get_index_schema
+
+        uid = index_uid or self.index_name
+        return get_index_schema(client=self, index_name=uid)
 
 
 def get_search_client(

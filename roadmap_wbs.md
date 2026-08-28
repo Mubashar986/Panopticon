@@ -243,7 +243,7 @@ graph TD
 - **Estimated time:** 30 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Schema documented and applied to a test index
+  - [x] Schema documented and applied to index (SearchDocument, INDEX_SETTINGS, ranking rules verified)
 - **Verification idea:** Add one manual test document, confirm fields appear as expected
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -444,8 +444,8 @@ graph TD
 | 2.4 | Done | None | `concept-to-code-bridge` | Permissions & sharing status built & verified (70/70 tests pass) |
 | 2.5 | Done | None | `concept-to-code-bridge` | Crawl persistence & incremental sync built & verified (79/79 tests pass) |
 | 3.1 | Done | None | `concept-to-code-bridge` | Search client, health check & diagnostics built & verified (93/93 tests pass) |
-| 3.2 | Yes | None | `concept-to-code-bridge` | Ready to start; 3.1 complete |
-| 3.3 | No | Needs 2.5, 3.2 | `concept-to-code-bridge` | |
+| 3.2 | Done | None | `concept-to-code-bridge` | SearchDocument model, index schema & ranking rules built & verified (103/103 tests pass) |
+| 3.3 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.5, 3.2 complete |
 | 3.4 | No | Needs 3.3 | `concept-to-code-bridge` | |
 | 4.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
 | 4.2 | No | Needs 3.4, 4.1 | `concept-to-code-bridge` | |

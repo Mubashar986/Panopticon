@@ -8,7 +8,8 @@ from app.search.exceptions import (
     SearchConnectionError,
     SearchError,
 )
-from app.search.models import IndexStats, MeiliHealthStatus, MeiliVersionInfo
+from app.search.models import IndexStats, MeiliHealthStatus, MeiliVersionInfo, SearchDocument
+from app.search.schema import INDEX_SETTINGS, configure_index_schema, get_index_schema
 
 __all__ = [
     "PanopticonSearchClient",
@@ -21,4 +22,8 @@ __all__ = [
     "MeiliHealthStatus",
     "MeiliVersionInfo",
     "IndexStats",
+    "SearchDocument",
+    "INDEX_SETTINGS",
+    "configure_index_schema",
+    "get_index_schema",
 ]
