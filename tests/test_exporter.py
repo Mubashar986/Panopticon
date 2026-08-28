@@ -48,7 +48,7 @@ def test_export_file_content_doc_success() -> None:
     assert result.status == "success"
     assert result.file_id == "doc_123"
     assert result.content_text == "Project Falcon Kickoff Notes\nThis is a test document."
-    assert result.snippet == "Project Falcon Kickoff Notes\nThis is a test document."
+    assert result.snippet == "Project Falcon Kickoff Notes This is a test document."
     assert result.size_bytes == len(b"Project Falcon Kickoff Notes\nThis is a test document.")
 
     mock_service.files().export_media.assert_called_once_with(

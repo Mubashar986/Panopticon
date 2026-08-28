@@ -278,3 +278,20 @@ class CrawlStats(BaseModel):
     duration_seconds: float = Field(
         default=0.0, description="Total crawl duration in seconds"
     )
+
+
+class SyncResult(BaseModel):
+    """Summary of changes applied during an incremental or bootstrap synchronization cycle."""
+
+    model_config = ConfigDict(frozen=True)
+
+    added_count: int = Field(default=0, description="Number of new files discovered and stored")
+    updated_count: int = Field(default=0, description="Number of modified files updated")
+    deleted_count: int = Field(default=0, description="Number of deleted or trashed files purged")
+    unchanged_count: int = Field(default=0, description="Number of existing files up to date")
+    total_stored: int = Field(default=0, description="Total active files currently in local storage")
+    duration_seconds: float = Field(default=0.0, description="Elapsed sync duration in seconds")
+    watermark_used: datetime | None = Field(default=None, description="Watermark timestamp used for delta query")
+    new_watermark: datetime = Field(..., description="New watermark timestamp committed")
+    is_full_refresh: bool = Field(default=False, description="Whether this was a full bootstrap sync")
+

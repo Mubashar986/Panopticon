@@ -23,9 +23,12 @@ from app.indexer.models import (
     DriveFileMetadata,
     DrivePermission,
     SharingStatus,
+    SyncResult,
     sanitize_string,
 )
 from app.indexer.permissions import PermissionClassifier
+from app.indexer.storage import CrawlStorage
+from app.indexer.sync import IncrementalSyncEngine
 
 __all__ = [
     "DEFAULT_DOCS_SHEETS_QUERY",
@@ -34,6 +37,7 @@ __all__ = [
     "GOOGLE_SHEET_MIME_TYPE",
     "ContentExporter",
     "CrawlStats",
+    "CrawlStorage",
     "DriveCrawler",
     "DriveFileMetadata",
     "DriveLabel",
@@ -41,9 +45,11 @@ __all__ = [
     "DrivePermission",
     "ExportResult",
     "ExportStatus",
+    "IncrementalSyncEngine",
     "LabelExtractor",
     "PermissionClassifier",
     "SharingStatus",
+    "SyncResult",
     "build_label_query",
     "sanitize_string",
 ]

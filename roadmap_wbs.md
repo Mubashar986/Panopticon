@@ -216,8 +216,8 @@ graph TD
 - **Estimated time:** 90 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Second run only touches files modified since the first run
-  - [ ] Deleted files are detected and removed from the store
+  - [x] Second run only touches files modified since the first run
+  - [x] Deleted files are detected and removed from the store
 - **Verification idea:** Modify one test file, rerun, confirm only that file is reprocessed
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -442,7 +442,7 @@ graph TD
 | 2.2 | Done | None | `concept-to-code-bridge` | Label query & tag extraction built & verified (51/51 tests pass) |
 | 2.3 | Done | None | `concept-to-code-bridge` | Content exporter with 10MB cap handling built & verified (61/61 tests pass) |
 | 2.4 | Done | None | `concept-to-code-bridge` | Permissions & sharing status built & verified (70/70 tests pass) |
-| 2.5 | Yes | None | `concept-to-code-bridge` | Ready to start; 2.2, 2.3, 2.4 complete |
+| 2.5 | Done | None | `concept-to-code-bridge` | Crawl persistence & incremental sync built & verified (79/79 tests pass) |
 | 3.1 | Yes | None | `concept-to-code-bridge` | Can start immediately, in parallel |
 | 3.2 | No | Needs 3.1 | `concept-to-code-bridge` | |
 | 3.3 | No | Needs 2.5, 3.2 | `concept-to-code-bridge` | |
@@ -465,6 +465,21 @@ graph TD
 **Why:** There's no external approval blocker anymore, so nothing stops you from starting today. But 1.2 is still the task that matters most: it's the one architectural decision that determines whether moving to full company-wide access later is a config swap or a rewrite. Get the interface right now, while the codebase is small and there's nothing yet depending on the wrong shape.
 
 **What happens next:** Run Stage 1 with `concept-to-code-bridge` for Task 1.2, with 1.1 running alongside it.
+
+## 11. Future Phases & Backlog
+
+### Epic 7: Real-Time Drive Webhooks & Push Sync (Post-MVP)
+*Governed by [`docs/future/RFC-0001-realtime-webhooks.md`](file:///c:/Users/Mubashar/Desktop/Panopticon/docs/future/RFC-0001-realtime-webhooks.md)*
+
+#### 7.1 FastAPI Webhook Receiver Endpoint (`/api/drive/webhook`)
+- **Goal:** Expose public webhook listener endpoint to process incoming Google Drive `X-Goog-Resource-State` event notifications.
+- **Depends on:** 2.5, 4.1
+
+#### 7.2 Channel Watch Registrar & Automatic Renewal Daemon
+- **Goal:** Register Google Drive `changes.watch` subscription and automatically renew expiring watch channels.
+- **Depends on:** 7.1
+
+---
 
 ## 12. Open Questions
 
