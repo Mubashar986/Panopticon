@@ -479,6 +479,10 @@ graph TD
 - **Goal:** Register Google Drive `changes.watch` subscription and automatically renew expiring watch channels.
 - **Depends on:** 7.1
 
+#### 7.3 Concurrent Document Export Worker Pool (`ThreadPoolExecutor` / `AsyncIO`)
+- **Goal:** Implement a bounded concurrency worker pool (5–8 workers) with live visual progress feedback to export Google Docs/Sheets text snippets in parallel during bootstrap crawl, reducing initial sync duration from ~8 minutes down to ~30–45 seconds.
+- **Depends on:** 2.3, 2.5
+
 ---
 
 ## 12. Open Questions
