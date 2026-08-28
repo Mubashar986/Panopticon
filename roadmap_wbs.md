@@ -267,8 +267,8 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Deliberate typo queries return the correct file
-  - [ ] Tagged matches appear above fuzzy-only matches
+  - [x] Deliberate typo queries return the correct file (e.g., "Falcn" -> "Falcon", "SmartTrde" -> "SmartTrade")
+  - [x] Tagged matches appear above fuzzy-only matches (SearchService ranking rules & match attribution verified)
 - **Verification idea:** Run misspelled test queries
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -446,9 +446,9 @@ graph TD
 | 3.1 | Done | None | `concept-to-code-bridge` | Search client, health check & diagnostics built & verified (93/93 tests pass) |
 | 3.2 | Done | None | `concept-to-code-bridge` | SearchDocument model, index schema & ranking rules built & verified (103/103 tests pass) |
 | 3.3 | Done | None | `concept-to-code-bridge` | SearchIngestionEngine, batch chunking & ghost deletion built & verified (110/110 tests pass) |
-| 3.4 | Yes | None | `concept-to-code-bridge` | Ready to start; 3.3 complete |
+| 3.4 | Done | None | `concept-to-code-bridge` | SearchService, typo tolerance & ranking rules built & verified (117/117 tests pass) |
 | 4.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
-| 4.2 | No | Needs 3.4, 4.1 | `concept-to-code-bridge` | |
+| 4.2 | No | Needs 4.1 | `concept-to-code-bridge` | (3.4 is complete, waiting on 4.1) |
 | 4.3 | No | Needs 4.1 | `concept-to-code-bridge` | Stub only — real auth still an open question |
 | 5.1 | Yes | None | `concept-to-code-bridge` | Can start immediately |
 | 5.2 | No | Needs 5.1 | `concept-to-code-bridge` | |

@@ -217,6 +217,38 @@ class PanopticonSearchClient:
         uid = index_uid or self.index_name
         return get_index_schema(client=self, index_name=uid)
 
+    def search(
+        self,
+        query: str,
+        file_type: str | None = None,
+        mime_type: str | None = None,
+        sharing_status: str | None = None,
+        project_tag: str | None = None,
+        primary_owner: str | None = None,
+        sort_by: list[str] | str | None = None,
+        limit: int = 20,
+        offset: int = 0,
+        index_name: str | None = None,
+        custom_filter: str | None = None,
+    ):
+        """Execute a typo-tolerant search query via SearchService."""
+        from app.search.service import SearchService
+
+        service = SearchService(search_client=self)
+        return service.search(
+            query=query,
+            file_type=file_type,
+            mime_type=mime_type,
+            sharing_status=sharing_status,
+            project_tag=project_tag,
+            primary_owner=primary_owner,
+            sort_by=sort_by,
+            limit=limit,
+            offset=offset,
+            index_name=index_name,
+            custom_filter=custom_filter,
+        )
+
 
 def get_search_client(
     url: str | None = None,

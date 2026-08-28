@@ -5,28 +5,13 @@ from __future__ import annotations
 import logging
 import time
 from typing import Any, Sequence
-from pydantic import BaseModel, ConfigDict, Field
-
 from app.indexer.models import DriveFileMetadata
 from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.search.client import PanopticonSearchClient, get_search_client
 from app.search.exceptions import IndexConfigurationError, SearchConnectionError, SearchError
-from app.search.schema import SearchDocument
+from app.search.models import IngestionResult, SearchDocument
 
 logger = logging.getLogger("panopticon.search.ingestion")
-
-
-class IngestionResult(BaseModel):
-    """Execution metrics for an ingestion or synchronization run."""
-
-    model_config = ConfigDict(frozen=True)
-
-    indexed_count: int = Field(default=0, description="Total documents successfully upserted")
-    deleted_count: int = Field(default=0, description="Total orphaned/deleted documents purged")
-    total_stored: int = Field(default=0, description="Total active documents stored in search index")
-    batch_count: int = Field(default=0, description="Number of batch HTTP chunks sent")
-    duration_seconds: float = Field(default=0.0, description="Total ingestion duration in seconds")
-    is_full_sync: bool = Field(default=True, description="Whether this was a full index refresh")
 
 
 class SearchIngestionEngine:
