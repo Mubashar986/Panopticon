@@ -360,67 +360,90 @@ graph TD
 
 ### Epic 5: Dashboard (React)
 
-#### 5.1 Scaffold the React app
-- **Goal:** Vite + React project running locally with a blank layout
-- **Main concept learned:** React project structure basics (components, props, `useState`)
-- **Why this comes here:** Foundation for every UI task below
-- **Depends on:** None (parallel with Epics 2-4)
-- **Estimated time:** 30 min
+#### 5.1 Scaffold the React app & Design System Foundation
+- **Goal:** Vite + React + TypeScript application running locally with design tokens and styling foundation.
+- **Main concept learned:** Design token system architecture (`tokens.json`), CSS variables/Tailwind tokenization, and component hierarchy.
+- **Why this comes here:** Foundation for all frontend components in Epic 5.
+- **Depends on:** 4.1, 4.2
+- **Estimated time:** 45 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Blank app runs locally
-- **Verification idea:** Open it in a browser
-- **Next lifecycle skill:** `concept-to-code-bridge`
+  - [ ] Canonical `design-system/tokens.json` generated via Picasso intake interview
+  - [ ] Vite + React + TypeScript project running locally on `http://localhost:5173`
+  - [ ] App shells with tokenized base layout and header
+- **Verification idea:** Open `http://localhost:5173` in browser and confirm tokens render cleanly.
+- **Next lifecycle skill:** `picasso` / `vermeer`
 
-#### 5.2 Build the search bar (dropdown + free-typed)
-- **Goal:** One input that supports picking a known project or typing any name
-- **Main concept learned:** Controlled inputs in React, conditional rendering
-- **Why this comes here:** Primary interaction of the whole tool
+#### 5.2 Build the search bar (debounced input + tag filter dropdown)
+- **Goal:** One responsive search input that supports free-typed typo queries and filtering by known Google Drive project tags.
+- **Main concept learned:** Debounced input handling, controlled search state, and interactive focus states.
+- **Why this comes here:** Primary user interaction of the search tool.
 - **Depends on:** 5.1
 - **Estimated time:** 60 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Typing and selecting both produce a query value
-- **Verification idea:** Manually test both input modes
-- **Next lifecycle skill:** `concept-to-code-bridge`
+  - [ ] Typing triggers debounced query (250ms) against `GET /api/search`
+  - [ ] Project tag dropdown populates and filters active search
+  - [ ] Search mode toggle switches between fuzzy, tag, and exact search
+- **Verification idea:** Manually test typing "Falcn" and verifying debounced search execution.
+- **Next lifecycle skill:** `vermeer`
 
-#### 5.3 Build the results list (with badges)
-- **Goal:** Renders title, snippet, owner, tag/confidence badge, sharing badge, "View" link per result
-- **Main concept learned:** Rendering lists from API data (`.map()`), conditional badge styling
-- **Why this comes here:** This is the actual value delivery of the dashboard
+#### 5.3 Build the results list (with badges & export links)
+- **Goal:** Renders title, snippet with highlighted match terms, primary owner, tag/confidence badge, sharing badge, "View in Drive" link, and direct export format links per result.
+- **Main concept learned:** Data contract mapping (Escher), rendering lists from API contracts, conditional badge styling.
+- **Why this comes here:** Delivers the primary value and search intelligence of Panopticon.
 - **Depends on:** 4.2, 5.2
 - **Estimated time:** 90 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Real API results render correctly for a known test query
-  - [ ] "View" link opens the real Drive file
-- **Verification idea:** Search for a real tagged test project end-to-end
-- **Next lifecycle skill:** `concept-to-code-bridge`
+  - [ ] Real API search results render correctly with highlighted match snippets
+  - [ ] Match attribution badges (`[TAG:HIGH]`, `[TITLE:HIGH]`, `[CONTENT:MEDIUM]`) display accurately
+  - [ ] "View in Drive" and export format links (`pdf`, `docx`, `xlsx`, `csv`) open correct targets
+- **Verification idea:** Search for a known indexed document and test click-through to Google Drive.
+- **Next lifecycle skill:** `escher` / `vermeer`
 
-#### 5.4 Add a login placeholder (deferred real auth)
-- **Goal:** UI has a login-state seam but doesn't block local usage — matches 4.3's backend stub
-- **Main concept learned:** none new — keeping UI decoupled from auth-provider specifics
-- **Why this comes here:** Keeps the future "team login" story open without slowing local progress
-- **Depends on:** 4.3, 5.1
-- **Estimated time:** 30 min
-- **Difficulty:** Beginner
-- **Acceptance criteria:**
-  - [ ] A login-state placeholder exists in the UI, currently always "logged in" locally
-- **Verification idea:** Confirm search still works without a real login flow
-- **Next lifecycle skill:** `concept-to-code-bridge`
-
-#### 5.5 Polish states: loading, empty, error, staleness flag
-- **Goal:** Dashboard feels finished, not just functional
-- **Main concept learned:** none new — UI state handling
-- **Why this comes here:** Last-mile quality before showing this to your lead
-- **Depends on:** 5.3
+#### 5.4 Build header sync controls & live progress drawer
+- **Goal:** "Sync Now" button, last-synced timestamp badge, sync mode selector, and live polling progress drawer powered by `/api/sync` and `/api/sync/status`.
+- **Main concept learned:** Polling state management, async background job feedback, and non-blocking UI notifications.
+- **Why this comes here:** Allows users to trigger incremental syncs, full re-crawls, or search re-indexing directly from the browser.
+- **Depends on:** 4.4, 5.1
 - **Estimated time:** 60 min
+- **Difficulty:** Intermediate
+- **Acceptance criteria:**
+  - [ ] Clicking "Sync Now" sends `POST /api/sync` and enters live polling state
+  - [ ] Last-synced watermark and file counts display dynamically
+  - [ ] Live progress drawer shows active phase (`crawling ➔ exporting ➔ indexing`)
+- **Verification idea:** Click "Sync Now" and verify live progress feedback and stats update.
+- **Next lifecycle skill:** `escher` / `vermeer`
+
+#### 5.5 Build Google Drive auth & credentials settings drawer
+- **Goal:** Settings modal/drawer connected to `/api/auth/` allowing users to view token status, connect Google accounts via popup, upload credential files, and switch auth modes.
+- **Main concept learned:** Web OAuth popup postMessage handling, credential upload handling, and dynamic auth state reflection.
+- **Why this comes here:** Gives users full control over Google Drive credentials from the UI with zero terminal commands needed.
+- **Depends on:** 4.6, 5.1
+- **Estimated time:** 60 min
+- **Difficulty:** Intermediate
+- **Acceptance criteria:**
+  - [ ] Drawer displays active mode (`oauth` vs `service_account`) and token expiration status
+  - [ ] "Connect Google Account" triggers OAuth popup and captures postMessage success
+  - [ ] Uploading `credentials.json` or `service_account.json` saves file and updates UI state
+  - [ ] Hot-switches active auth mode on the fly
+- **Verification idea:** Open Settings drawer, inspect credentials status, and test mode switching.
+- **Next lifecycle skill:** `escher` / `vermeer`
+
+#### 5.6 Add system diagnostics pill & polish states
+- **Goal:** Engine status indicator, loading skeletons, empty results state, error banners, and 90+ day stale file flag.
+- **Main concept learned:** UI state handling, graceful degradation, and accessibility compliance.
+- **Why this comes here:** Last-mile quality and usability polish before lead handoff.
+- **Depends on:** 4.5, 5.3
+- **Estimated time:** 45 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Loading, empty-results, and error states all render distinctly
-  - [ ] Files untouched 90+ days show a staleness flag
-- **Verification idea:** Force each state manually
-- **Next lifecycle skill:** `concept-to-code-bridge`
+  - [ ] Engine status pill reflects live Meilisearch health and total indexed doc count
+  - [ ] Loading skeletons, empty results, and 503 error banners render distinctly
+  - [ ] Documents unmodified in 90+ days display a subtle staleness badge
+- **Verification idea:** Test empty queries, invalid filters, and disconnected engine states.
+- **Next lifecycle skill:** `vermeer`
 
 ### Epic 6: Hardening & Handoff
 
@@ -501,12 +524,13 @@ graph TD
 | 4.5 | Done | None | `concept-to-code-bridge` | Auto-managed engine subprocess supervisor & binary bootstrap verified (140/140 tests pass) |
 | 4.6 | Done | None | `concept-to-code-bridge` | Server- & UI-managed Google Drive auth setup verified (148/148 tests pass) |
 | 5.1 | Yes | None | `picasso` / `vermeer` | Epic 4 Complete! Ready for Picasso design system intake |
-| 5.2 | No | Needs 5.1 | `vermeer` | |
-| 5.3 | No | Needs 4.2, 5.2 | `escher` / `vermeer` | (4.2 backend contract complete) |
-| 5.4 | No | Needs 4.3, 5.1 | `concept-to-code-bridge` | Placeholder only |
-| 5.5 | No | Needs 5.3 | `concept-to-code-bridge` | |
-| 6.1 | No | Needs 2.5, 3.4, 4.3, 5.4 | `testing-verification` | |
-| 6.2 | No | Needs 6.1 | N/A | |
+| 5.2 | No | Needs 5.1 | `vermeer` | Search bar with debounced input & tag filters |
+| 5.3 | No | Needs 4.2, 5.2 | `escher` / `vermeer` | Search results list, match attribution & export links |
+| 5.4 | No | Needs 4.4, 5.1 | `escher` / `vermeer` | Header sync controls & live progress drawer |
+| 5.5 | No | Needs 4.6, 5.1 | `escher` / `vermeer` | Google Drive auth & credentials settings drawer |
+| 5.6 | No | Needs 4.5, 5.3 | `vermeer` | System diagnostics pill & polish states |
+| 6.1 | No | Needs 2.5, 3.4, 4.3, 5.4, 5.5 | `testing-verification` | End-to-end verification pass |
+| 6.2 | No | Needs 6.1 | N/A | Prep demo for lead |
 
 ## 11. Recommended First Task
 
