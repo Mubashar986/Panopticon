@@ -326,6 +326,38 @@ graph TD
 - **Verification idea:** Trigger `/api/sync` via curl/PowerShell and poll `/api/sync/status` until completion.
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
+#### 4.5 Auto-Managed Engine Subprocess Supervisor & Binary Bootstrap
+- **Goal:** Enable FastAPI lifespan to automatically detect if Meilisearch binary is present (auto-download if missing), spawn and supervise the Meilisearch daemon process on startup, and perform graceful shutdown on exit with zero manual terminal execution needed.
+- **Main concept learned:** OS process lifecycle supervision, signal handling (`SIGTERM`/`SIGINT`), and resilient zero-setup developer experience.
+- **Why this comes here:** Eliminates manual terminal friction so developers and UI operators can run the entire platform with a single command.
+- **Depends on:** 3.1, 4.1
+- **Estimated time:** 45 min
+- **Difficulty:** Intermediate
+- **Acceptance criteria:**
+  - [x] `ProcessSupervisor` auto-downloads `meilisearch.exe` if absent in `bin/`
+  - [x] FastAPI lifespan auto-spawns Meilisearch child process if port 7700 is not already running
+  - [x] Polls health endpoint with deadline before serving traffic
+  - [x] Gracefully terminates child process on FastAPI shutdown
+  - [x] `/api/system/status` reports `is_managed_process: true/false`
+- **Verification idea:** Start FastAPI with Meilisearch offline; verify Meilisearch boots automatically and shuts down when FastAPI stops.
+- **Next lifecycle skill:** `concept-to-code-bridge`
+
+#### 4.6 Server- & UI-Managed Google Drive Authentication Setup
+- **Goal:** Provide REST endpoints and services to configure, test, upload, and switch Google Drive authentication (Personal OAuth vs Service Account) directly from the API and React UI without restarting or touching code.
+- **Main concept learned:** OAuth 2.0 Web Server authorization flow, dynamic provider hot-reloading, and secure local credential onboarding.
+- **Why this comes here:** Completes the server-side auth management so the React Dashboard settings modal can connect Google accounts and upload service account keys seamlessly.
+- **Depends on:** 1.2, 4.1
+- **Estimated time:** 60 min
+- **Difficulty:** Intermediate
+- **Acceptance criteria:**
+  - [ ] `GET /api/auth/config` returns active auth mode, credential files status, token validity, and expiration time
+  - [ ] `POST /api/auth/config` allows hot-switching active auth mode (`"oauth"` or `"service_account"`)
+  - [ ] `POST /api/auth/oauth/start` returns Google authorization URL for UI popup consent
+  - [ ] `GET /api/auth/oauth/callback` exchanges auth code, persists `token.json`, and reloads auth provider
+  - [ ] `POST /api/auth/credentials/upload` allows uploading `credentials.json` or `service_account.json`
+- **Verification idea:** Query `/api/auth/config`, trigger OAuth start, and upload credential payloads via REST.
+- **Next lifecycle skill:** `concept-to-code-bridge`
+
 ### Epic 5: Dashboard (React)
 
 #### 5.1 Scaffold the React app
@@ -466,7 +498,9 @@ graph TD
 | 4.2 | Done | None | `concept-to-code-bridge` | GET /api/search endpoint with Meilisearch integration & facets verified |
 | 4.3 | Done | None | `concept-to-code-bridge` | Pluggable auth seam & dependency injection verified |
 | 4.4 | Done | None | `concept-to-code-bridge` | POST /api/sync & GET /api/sync/status background sync manager verified (136/136 tests pass) |
-| 5.1 | Yes | None | `picasso` / `vermeer` | Can start immediately |
+| 4.5 | Done | None | `concept-to-code-bridge` | Auto-managed engine subprocess supervisor & binary bootstrap verified (140/140 tests pass) |
+| 4.6 | Yes | None | `concept-to-code-bridge` | Server- & UI-managed Google Drive auth setup |
+| 5.1 | No | Needs 4.6 | `picasso` / `vermeer` | (Epic 4 completes after 4.6) |
 | 5.2 | No | Needs 5.1 | `vermeer` | |
 | 5.3 | No | Needs 4.2, 5.2 | `escher` / `vermeer` | (4.2 backend contract complete) |
 | 5.4 | No | Needs 4.3, 5.1 | `concept-to-code-bridge` | Placeholder only |

@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.api.routes import api_router
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
+from app.core.supervisor import get_engine_supervisor
 from app.search.client import get_search_client
 from app.search.exceptions import IndexNotFoundError, SearchConnectionError, SearchError
 
@@ -28,7 +29,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Search Engine Host: %s", settings.MEILI_HOST)
     logger.info("Drive Auth Provider Mode: %s", settings.DRIVE_AUTH_MODE)
 
-    # Verify search engine connectivity on startup (non-fatal warning if engine is cold)
+    # 1. Supervise Meilisearch engine lifecycle (auto-download & auto-spawn if offline)
+    supervisor = get_engine_supervisor()
+    try:
+        supervisor.start(timeout_seconds=5.0)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not auto-start Meilisearch supervisor: %s", exc)
+
+    # 2. Verify search engine connectivity and auto-provision schema
     try:
         client = get_search_client()
         health = client.health_check()
@@ -45,6 +53,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    # 3. Graceful shutdown of managed search engine process
+    supervisor.stop(timeout_seconds=3.0)
     logger.info("Shutting down %s API server cleanly.", settings.APP_NAME)
 
 

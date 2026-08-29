@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from app.api.deps import SearchClientDep
 from app.api.schemas.health import HealthResponse, SystemStatusResponse
 from app.core.config import get_settings
+from app.core.supervisor import get_engine_supervisor
 
 router = APIRouter(tags=["Health & Diagnostics"])
 
@@ -43,11 +44,13 @@ async def system_status(
     """Deep system health diagnostic endpoint."""
     settings = get_settings()
     health_info = search_client.health_check()
-    
+    supervisor_info = get_engine_supervisor().get_status_info()
+
     doc_count = 0
     is_indexing = False
     details: dict[str, object] = {
         "meilisearch_version": health_info.version,
+        "supervisor": supervisor_info,
     }
 
     if health_info.is_available:
@@ -73,5 +76,7 @@ async def system_status(
         index_name=settings.MEILI_INDEX_NAME,
         document_count=doc_count,
         is_indexing=is_indexing,
+        is_managed_process=supervisor_info.get("is_managed_process", False),
+        process_pid=supervisor_info.get("process_pid"),
         details=details,
     )

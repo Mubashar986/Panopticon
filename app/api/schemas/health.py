@@ -35,4 +35,6 @@ class SystemStatusResponse(BaseModel):
     index_name: str = Field(..., description="Configured default search index UID")
     document_count: int = Field(default=0, description="Total indexed document count in search index")
     is_indexing: bool = Field(default=False, description="True if search index is currently building")
+    is_managed_process: bool = Field(default=False, description="True if Meilisearch process is actively supervised by FastAPI")
+    process_pid: int | None = Field(default=None, description="Operating system PID of the managed Meilisearch child process")
     details: dict[str, Any] = Field(default_factory=dict, description="Detailed diagnostic metrics and metadata")
