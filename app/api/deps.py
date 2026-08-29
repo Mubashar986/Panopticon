@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.api.services.sync_manager import SyncManager, get_sync_manager
 from app.search.client import PanopticonSearchClient, get_search_client
 from app.search.service import SearchService, get_search_service
 
@@ -56,7 +57,13 @@ def get_search_service_dep(
     return get_search_service(search_client=client)
 
 
+def get_sync_manager_dep() -> SyncManager:
+    """Provide the global SyncManager singleton instance."""
+    return get_sync_manager()
+
+
 # Type aliases for clean FastAPI route parameter annotations
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 SearchServiceDep = Annotated[SearchService, Depends(get_search_service_dep)]
 SearchClientDep = Annotated[PanopticonSearchClient, Depends(get_search_client_dep)]
+SyncManagerDep = Annotated[SyncManager, Depends(get_sync_manager_dep)]

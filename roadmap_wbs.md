@@ -311,6 +311,21 @@ graph TD
 - **Verification idea:** Confirm route handlers never reference auth details directly
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
+#### 4.4 Add Background Drive Sync & Ingestion API Endpoints (`POST /api/sync`, `GET /api/sync/status`, `POST /api/sync/reindex`)
+- **Goal:** Expose endpoints allowing the React Dashboard to trigger and monitor background Drive crawling, SQLite state updates, and Meilisearch search index synchronization with live progress feedback and collision prevention (HTTP 409).
+- **Main concept learned:** Asynchronous background task execution, non-blocking state tracking, and thread-safe job state coordination.
+- **Why this comes here:** Bridges the terminal sync workflow (`sync_drive.py`) directly into the UI dashboard so the entire system can be managed from the browser.
+- **Depends on:** 2.5, 3.3, 4.1
+- **Estimated time:** 60 min
+- **Difficulty:** Intermediate
+- **Acceptance criteria:**
+  - [x] `POST /api/sync` triggers background crawler + exporter + SQLite + Meilisearch sync and returns HTTP 202 Accepted
+  - [x] `GET /api/sync/status` returns real-time progress state, watermark timestamp, and sync statistics
+  - [x] Concurrent sync attempts return HTTP 409 Conflict
+  - [x] `POST /api/sync/reindex` re-indexes SQLite to Meilisearch without calling Google Drive
+- **Verification idea:** Trigger `/api/sync` via curl/PowerShell and poll `/api/sync/status` until completion.
+- **Next lifecycle skill:** `concept-to-code-bridge`
+
 ### Epic 5: Dashboard (React)
 
 #### 5.1 Scaffold the React app
@@ -450,6 +465,7 @@ graph TD
 | 4.1 | Done | None | `concept-to-code-bridge` | FastAPI app skeleton, CORS, health & system status built & verified (130/130 tests pass) |
 | 4.2 | Done | None | `concept-to-code-bridge` | GET /api/search endpoint with Meilisearch integration & facets verified |
 | 4.3 | Done | None | `concept-to-code-bridge` | Pluggable auth seam & dependency injection verified |
+| 4.4 | Done | None | `concept-to-code-bridge` | POST /api/sync & GET /api/sync/status background sync manager verified (136/136 tests pass) |
 | 5.1 | Yes | None | `picasso` / `vermeer` | Can start immediately |
 | 5.2 | No | Needs 5.1 | `vermeer` | |
 | 5.3 | No | Needs 4.2, 5.2 | `escher` / `vermeer` | (4.2 backend contract complete) |
