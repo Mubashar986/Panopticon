@@ -350,11 +350,11 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] `GET /api/auth/config` returns active auth mode, credential files status, token validity, and expiration time
-  - [ ] `POST /api/auth/config` allows hot-switching active auth mode (`"oauth"` or `"service_account"`)
-  - [ ] `POST /api/auth/oauth/start` returns Google authorization URL for UI popup consent
-  - [ ] `GET /api/auth/oauth/callback` exchanges auth code, persists `token.json`, and reloads auth provider
-  - [ ] `POST /api/auth/credentials/upload` allows uploading `credentials.json` or `service_account.json`
+  - [x] `GET /api/auth/config` returns active auth mode, credential files status, token validity, and expiration time
+  - [x] `POST /api/auth/config` allows hot-switching active auth mode (`"oauth"` or `"service_account"`)
+  - [x] `POST /api/auth/oauth/start` returns Google authorization URL for UI popup consent
+  - [x] `GET /api/auth/oauth/callback` exchanges auth code, persists `token.json`, and reloads auth provider
+  - [x] `POST /api/auth/credentials/upload` allows uploading `credentials.json` or `service_account.json`
 - **Verification idea:** Query `/api/auth/config`, trigger OAuth start, and upload credential payloads via REST.
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -499,8 +499,8 @@ graph TD
 | 4.3 | Done | None | `concept-to-code-bridge` | Pluggable auth seam & dependency injection verified |
 | 4.4 | Done | None | `concept-to-code-bridge` | POST /api/sync & GET /api/sync/status background sync manager verified (136/136 tests pass) |
 | 4.5 | Done | None | `concept-to-code-bridge` | Auto-managed engine subprocess supervisor & binary bootstrap verified (140/140 tests pass) |
-| 4.6 | Yes | None | `concept-to-code-bridge` | Server- & UI-managed Google Drive auth setup |
-| 5.1 | No | Needs 4.6 | `picasso` / `vermeer` | (Epic 4 completes after 4.6) |
+| 4.6 | Done | None | `concept-to-code-bridge` | Server- & UI-managed Google Drive auth setup verified (148/148 tests pass) |
+| 5.1 | Yes | None | `picasso` / `vermeer` | Epic 4 Complete! Ready for Picasso design system intake |
 | 5.2 | No | Needs 5.1 | `vermeer` | |
 | 5.3 | No | Needs 4.2, 5.2 | `escher` / `vermeer` | (4.2 backend contract complete) |
 | 5.4 | No | Needs 4.3, 5.1 | `concept-to-code-bridge` | Placeholder only |
