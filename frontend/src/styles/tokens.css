@@ -1,0 +1,37 @@
+:root {
+  --color-bg-canvas: #090514;
+  --color-bg-surface: #150E24;
+  --color-bg-surface-elevated: #1E1B3A;
+  --color-text-primary: #F1F5F9;
+  --color-text-secondary: #94A3B8;
+  --color-primary: #8B5CF6;
+  --color-primary-hover: #A78BFA;
+  --color-border: #2E2A4A;
+  --color-tag-match: #A855F7;
+  --color-drive: #4285F4;
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-error: #F43F5E;
+  
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+  --elevation-glow-primary: 0 0 20px -5px rgba(139, 92, 246, 0.5);
+  --elevation-card-hover: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+  --motion-duration-base: 250ms;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}

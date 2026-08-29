@@ -368,9 +368,9 @@ graph TD
 - **Estimated time:** 45 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Canonical `design-system/tokens.json` generated via Picasso intake interview
-  - [ ] Vite + React + TypeScript project running locally on `http://localhost:5173`
-  - [ ] App shells with tokenized base layout and header
+  - [x] Canonical `design-system/tokens.json` generated via Picasso intake interview
+  - [x] Vite + React + TypeScript project running locally on `http://localhost:5173`
+  - [x] App shells with tokenized base layout and header
 - **Verification idea:** Open `http://localhost:5173` in browser and confirm tokens render cleanly.
 - **Next lifecycle skill:** `picasso` / `vermeer`
 
@@ -382,9 +382,9 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Typing triggers debounced query (250ms) against `GET /api/search`
-  - [ ] Project tag dropdown populates and filters active search
-  - [ ] Search mode toggle switches between fuzzy, tag, and exact search
+  - [x] Typing triggers debounced query (250ms) against `GET /api/search`
+  - [x] Project tag dropdown populates and filters active search
+  - [x] Search mode toggle switches between fuzzy, tag, and exact search
 - **Verification idea:** Manually test typing "Falcn" and verifying debounced search execution.
 - **Next lifecycle skill:** `vermeer`
 
@@ -396,9 +396,9 @@ graph TD
 - **Estimated time:** 90 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Real API search results render correctly with highlighted match snippets
-  - [ ] Match attribution badges (`[TAG:HIGH]`, `[TITLE:HIGH]`, `[CONTENT:MEDIUM]`) display accurately
-  - [ ] "View in Drive" and export format links (`pdf`, `docx`, `xlsx`, `csv`) open correct targets
+  - [x] Real API search results render correctly with highlighted match snippets
+  - [x] Match attribution badges (`[TAG:HIGH]`, `[TITLE:HIGH]`, `[CONTENT:MEDIUM]`) display accurately
+  - [x] "View in Drive" and export format links (`pdf`, `docx`, `xlsx`, `csv`) open correct targets
 - **Verification idea:** Search for a known indexed document and test click-through to Google Drive.
 - **Next lifecycle skill:** `escher` / `vermeer`
 
@@ -410,9 +410,9 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Clicking "Sync Now" sends `POST /api/sync` and enters live polling state
-  - [ ] Last-synced watermark and file counts display dynamically
-  - [ ] Live progress drawer shows active phase (`crawling ➔ exporting ➔ indexing`)
+  - [x] Clicking "Sync Now" sends `POST /api/sync` and enters live polling state
+  - [x] Last-synced watermark and file counts display dynamically
+  - [x] Live progress drawer shows active phase (`crawling ➔ exporting ➔ indexing`)
 - **Verification idea:** Click "Sync Now" and verify live progress feedback and stats update.
 - **Next lifecycle skill:** `escher` / `vermeer`
 
@@ -424,10 +424,10 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate
 - **Acceptance criteria:**
-  - [ ] Drawer displays active mode (`oauth` vs `service_account`) and token expiration status
-  - [ ] "Connect Google Account" triggers OAuth popup and captures postMessage success
-  - [ ] Uploading `credentials.json` or `service_account.json` saves file and updates UI state
-  - [ ] Hot-switches active auth mode on the fly
+  - [x] Drawer displays active mode (`oauth` vs `service_account`) and token expiration status
+  - [x] "Connect Google Account" triggers OAuth popup and captures postMessage success
+  - [x] Uploading `credentials.json` or `service_account.json` saves file and updates UI state
+  - [x] Hot-switches active auth mode on the fly
 - **Verification idea:** Open Settings drawer, inspect credentials status, and test mode switching.
 - **Next lifecycle skill:** `escher` / `vermeer`
 
@@ -439,9 +439,9 @@ graph TD
 - **Estimated time:** 45 min
 - **Difficulty:** Beginner
 - **Acceptance criteria:**
-  - [ ] Engine status pill reflects live Meilisearch health and total indexed doc count
-  - [ ] Loading skeletons, empty results, and 503 error banners render distinctly
-  - [ ] Documents unmodified in 90+ days display a subtle staleness badge
+  - [x] Engine status pill reflects live Meilisearch health and total indexed doc count
+  - [x] Loading skeletons, empty results, and 503 error banners render distinctly
+  - [x] Documents unmodified in 90+ days display a subtle staleness badge
 - **Verification idea:** Test empty queries, invalid filters, and disconnected engine states.
 - **Next lifecycle skill:** `vermeer`
 
