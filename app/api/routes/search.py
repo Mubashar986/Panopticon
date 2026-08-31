@@ -34,11 +34,10 @@ async def search_documents(
     search_service: SearchServiceDep,
     current_user: CurrentUser,
     q: str = Query(
-        ...,
-        min_length=1,
+        default="",
         max_length=500,
-        description="Search query string (supports project names, keywords, and typos)",
-        examples=["Falcon", "Project Alpha", "SmartTrde"],
+        description="Search query string (supports project names, keywords, typos, or empty string to browse all)",
+        examples=["Falcon", "Project Alpha", "SmartTrde", ""],
     ),
     mode: Literal["fuzzy", "tag", "exact"] = Query(
         default="fuzzy",
@@ -69,9 +68,9 @@ async def search_documents(
         description="Sort field and direction, e.g. 'modified_time:desc'",
     ),
     limit: int = Query(
-        default=20,
+        default=50,
         ge=1,
-        le=100,
+        le=500,
         description="Maximum result items to return per page",
     ),
     offset: int = Query(
@@ -93,11 +92,14 @@ async def search_documents(
     # If tag mode requested without a specific project_tag facet, apply q to project_tag if plausible
     effective_tag = project_tag
     effective_query = q
-    if mode == "tag" and not project_tag:
+    if mode == "tag" and not project_tag and q.strip():
         effective_tag = q.strip()
-    elif mode == "exact":
+    elif mode == "exact" and q.strip():
         # In exact mode, enclose multi-word query in quotes for phrase matching
         effective_query = f'"{q.strip()}"' if " " in q.strip() and not q.startswith('"') else q
+
+    # If blank query and no sort specified, default to sorting by newest modified
+    effective_sort = sort_by or ("modified_time:desc" if not q.strip() else None)
 
     try:
         domain_result = search_service.search(
@@ -107,12 +109,13 @@ async def search_documents(
             sharing_status=sharing_status,
             project_tag=effective_tag,
             primary_owner=primary_owner,
-            sort_by=sort_by,
+            sort_by=effective_sort,
             limit=limit,
             offset=offset,
         )
 
         return SearchResponse.from_search_result(domain_result)
+
 
     except SearchConnectionError as exc:
         logger.error("Search engine connection failed: %s", exc)

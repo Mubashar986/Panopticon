@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { SearchResponse } from '../../types/api';
+import { SearchResponse } from '../types/api';
 
 export function useSearch() {
   const [query, setQuery] = useState('');
@@ -17,8 +17,9 @@ export function useSearch() {
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ q: searchQuery, mode });
+      const params = new URLSearchParams({ q: searchQuery, mode, limit: '50' });
       Object.entries(filters).forEach(([k, v]) => { if (v) params.append(k, v); });
+
       
       const res = await fetch(`http://localhost:8000/api/search?${params}`);
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);

@@ -146,18 +146,33 @@ def test_search_tag_mode(client: TestClient, mock_search_service: MagicMock) -> 
         project_tag="Falcon",
         primary_owner=None,
         sort_by=None,
-        limit=20,
+        limit=50,
         offset=0,
     )
 
 
-def test_search_validation_empty_query(client: TestClient) -> None:
-    """Verify missing or empty 'q' query parameter triggers HTTP 422 Unprocessable Entity."""
+def test_search_blank_query_browsing_allowed(
+    client: TestClient, mock_search_service: MagicMock
+) -> None:
+    """Verify empty or missing 'q' parameter is allowed and defaults to modified_time:desc sort."""
     response = client.get("/api/search")
-    assert response.status_code == 422
+    assert response.status_code == 200
+
+    mock_search_service.search.assert_called_with(
+        query="",
+        file_type=None,
+        mime_type=None,
+        sharing_status=None,
+        project_tag=None,
+        primary_owner=None,
+        sort_by="modified_time:desc",
+        limit=50,
+        offset=0,
+    )
 
     response_empty = client.get("/api/search?q=")
-    assert response_empty.status_code == 422
+    assert response_empty.status_code == 200
+
 
 
 def test_search_connection_error_returns_503(
