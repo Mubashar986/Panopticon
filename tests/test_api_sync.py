@@ -5,12 +5,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.api.app import create_app
 from app.api.deps import get_sync_manager_dep
 from app.api.schemas.sync import SyncStats
 from app.api.services.sync_manager import SyncInProgressError, SyncManager
+
 
 
 def test_get_sync_status_idle() -> None:
@@ -184,3 +186,25 @@ def test_sync_manager_state_transitions() -> None:
     assert status_done.is_syncing is False
     assert status_done.last_sync_stats is not None
     assert status_done.last_sync_stats.added == 3
+
+
+@pytest.mark.asyncio
+async def test_sync_manager_background_scheduler_lifecycle() -> None:
+    """Verify start_background_scheduler and stop_background_scheduler work cleanly."""
+    manager = SyncManager()
+    assert manager._scheduler_running is False
+
+    # Start scheduler
+    manager.start_background_scheduler(interval_seconds=60)
+    assert manager._scheduler_running is True
+    assert manager._scheduler_task is not None
+
+    # Calling start again while running is idempotent
+    manager.start_background_scheduler(interval_seconds=60)
+    assert manager._scheduler_running is True
+
+    # Stop scheduler
+    manager.stop_background_scheduler()
+    assert manager._scheduler_running is False
+    assert manager._scheduler_task is None
+

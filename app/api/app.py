@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import api_router
+from app.api.services.sync_manager import get_sync_manager
 from app.core.config import get_settings
 from app.core.logging import get_logger, setup_logging
 from app.core.supervisor import get_engine_supervisor
@@ -51,11 +52,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     except Exception as exc:  # noqa: BLE001
         logger.warning("Search client check on startup encountered: %s", exc)
 
+    # 3. Start auto-sync background polling scheduler if enabled
+    sync_manager = get_sync_manager()
+    if settings.AUTO_SYNC_ENABLED:
+        sync_manager.start_background_scheduler(interval_seconds=settings.AUTO_SYNC_INTERVAL_SECONDS)
+
     yield
 
-    # 3. Graceful shutdown of managed search engine process
+    # 4. Stop auto-sync background scheduler
+    if settings.AUTO_SYNC_ENABLED:
+        sync_manager.stop_background_scheduler()
+
+    # 5. Graceful shutdown of managed search engine process
     supervisor.stop(timeout_seconds=3.0)
     logger.info("Shutting down %s API server cleanly.", settings.APP_NAME)
+
 
 
 def create_app() -> FastAPI:

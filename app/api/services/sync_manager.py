@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import threading
 import time
 import uuid
 from datetime import datetime, timezone
+
 
 from app.api.schemas.sync import (
     ReindexResponse,
@@ -51,6 +53,9 @@ class SyncManager:
         self._duration_seconds: float | None = None
         self._last_stats: SyncStats | None = None
         self._last_error: str | None = None
+        self._scheduler_task: asyncio.Task[None] | None = None
+        self._scheduler_running: bool = False
+
 
     @classmethod
     def get_instance(cls) -> SyncManager:
@@ -417,6 +422,59 @@ class SyncManager:
 
 
 
+    def start_background_scheduler(self, interval_seconds: int = 30) -> None:
+        """Start the automated background polling scheduler if not already running."""
+        with self._lock:
+            if self._scheduler_running:
+                return
+            self._scheduler_running = True
+
+        try:
+            loop = asyncio.get_running_loop()
+            self._scheduler_task = loop.create_task(self._scheduler_loop(interval_seconds))
+            logger.info("Auto-sync background scheduler task spawned (Interval: %ds)", interval_seconds)
+        except RuntimeError:
+            logger.warning("No running asyncio event loop found; background scheduler not started.")
+
+    def stop_background_scheduler(self) -> None:
+        """Stop the automated background polling scheduler cleanly."""
+        with self._lock:
+            self._scheduler_running = False
+            task = self._scheduler_task
+            self._scheduler_task = None
+
+        if task and not task.done():
+            task.cancel()
+            logger.info("Auto-sync background scheduler task cancelled.")
+
+    async def _scheduler_loop(self, interval_seconds: int) -> None:
+        """Background coroutine that periodically checks Google Drive for modifications."""
+        logger.info("Auto-sync background loop active (Checking every %ds)", interval_seconds)
+        while self._scheduler_running:
+            try:
+                await asyncio.sleep(interval_seconds)
+                if not self._scheduler_running:
+                    break
+
+                if not self.is_syncing:
+                    settings = get_settings()
+                    provider = get_auth_provider(settings)
+                    # Only attempt sync if auth credentials are valid
+                    if provider.is_authenticated:
+                        logger.debug("Auto-sync scheduler checking Google Drive for modifications...")
+                        try:
+                            self.trigger_sync(full_refresh=False, export_content=True)
+                        except SyncInProgressError:
+                            pass
+            except asyncio.CancelledError:
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Auto-sync background loop encountered error: %s", exc)
+                await asyncio.sleep(10)
+        logger.info("Auto-sync background loop terminated.")
+
+
 def get_sync_manager() -> SyncManager:
     """Return the global SyncManager singleton."""
     return SyncManager.get_instance()
+

@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # Local Persistence
     CRAWL_DB_PATH: str = "data/crawl_state.db"
 
+    # Auto-Sync Background Scheduler
+    AUTO_SYNC_ENABLED: bool = True
+    AUTO_SYNC_INTERVAL_SECONDS: int = 30
+
+
     @property
     def credentials_path(self) -> Path:
         """Resolved Path to OAuth client secrets file."""
