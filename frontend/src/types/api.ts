@@ -40,6 +40,42 @@ export interface SearchItemResponse {
   highlighted_snippet: string | null;
 }
 
+export interface DocumentResponseItem {
+  id: string;
+  name: string;
+  type: DocumentType;
+  mime_type: string;
+  owner: string;
+  owners: string[];
+  last_modifying_user: string | null;
+  modified_time: string | null;
+  created_time: string | null;
+  sharing_status: SharingStatus;
+  shared_with: string;
+  project_tags: string[];
+  snippet: string | null;
+  view_url: string | null;
+  icon_link: string | null;
+  size_bytes: number | null;
+  export_status: string | null;
+  export_links: Record<string, string> | null;
+}
+
+export interface DocumentListResponse {
+  total_count: number;
+  limit: number;
+  offset: number;
+  processing_time_ms: number;
+  documents: DocumentResponseItem[];
+}
+
+export interface LiveSyncEvent {
+  id: string;
+  event_type: 'connected' | 'heartbeat' | 'sync_started' | 'sync_progress' | 'sync_completed' | 'sync_failed' | 'file_modified' | 'file_created';
+  data: Record<string, any>;
+  timestamp: string;
+}
+
 export interface SearchResponse {
   query: string;
   total_hits: number;
@@ -49,6 +85,7 @@ export interface SearchResponse {
   facet_distribution: Record<string, Record<string, number>>;
   results: SearchItemResponse[];
 }
+
 
 export interface SyncStats {
   sync_mode: string;
