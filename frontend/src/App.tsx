@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useSearch } from './hooks/useSearch';
 import { useSync } from './hooks/useSync';
 import { useDocuments } from './hooks/useDocuments';
+import { DocumentResponseItem } from './types/api';
 import { SearchBar } from './components/search/SearchBar';
 import { ModeSelector } from './components/search/ModeSelector';
 import { FilterBar } from './components/search/FilterBar';
@@ -12,6 +13,7 @@ import { SettingsDrawer } from './components/settings/SettingsDrawer';
 import { DenseDocumentTable } from './components/directory/DenseDocumentTable';
 import { PaginationBar } from './components/directory/PaginationBar';
 import { ViewToggle, ViewMode } from './components/directory/ViewToggle';
+import { VersionHistoryModal } from './components/diff/VersionHistoryModal';
 
 export default function Dashboard() {
   const search = useSearch();
@@ -21,6 +23,7 @@ export default function Dashboard() {
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [selectedDocForHistory, setSelectedDocForHistory] = useState<DocumentResponseItem | null>(null);
 
   const isSearching = search.query.trim().length > 0;
 
@@ -90,6 +93,7 @@ export default function Dashboard() {
             sortBy={docs.sortBy}
             onSortChange={docs.setSortBy}
             recentlyModifiedIds={docs.recentlyModifiedIds}
+            onViewHistory={(doc) => setSelectedDocForHistory(doc)}
           />
           <PaginationBar
             totalCount={docs.totalCount}
@@ -105,7 +109,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Drawers */}
+      {/* Drawers & Modals */}
       <SyncProgressDrawer
         isOpen={syncDrawerOpen}
         onClose={() => setSyncDrawerOpen(false)}
@@ -113,6 +117,13 @@ export default function Dashboard() {
         onReindex={sync.triggerReindex}
       />
       <SettingsDrawer isOpen={settingsDrawerOpen} onClose={() => setSettingsDrawerOpen(false)} />
+      
+      <VersionHistoryModal
+        isOpen={!!selectedDocForHistory}
+        onClose={() => setSelectedDocForHistory(null)}
+        fileId={selectedDocForHistory?.id || null}
+        fileName={selectedDocForHistory?.name || ''}
+      />
     </div>
   );
 }

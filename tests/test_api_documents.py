@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.api.app import create_app
 from app.api.deps import get_crawl_storage_dep
-from app.indexer.models import DriveFileMetadata
+from app.indexer.models import DocumentDiff, DocumentVersion, DriveFileMetadata
 from app.indexer.storage import CrawlStorage
 
 
@@ -245,3 +245,75 @@ def test_get_documents_validation_bounds(client: TestClient):
     # Invalid sort_by option
     res_bad_sort = client.get("/api/documents?sort_by=invalid_col:desc")
     assert res_bad_sort.status_code == 422
+
+
+def test_get_document_versions_and_diffs_api(
+    client: TestClient,
+    populated_storage: CrawlStorage,
+):
+    """Test retrieving historical versions and diffs for a document via API."""
+    doc_id = "doc_001"
+
+    # Insert sample version snapshots
+    v1 = populated_storage.save_version(
+        DocumentVersion(
+            id="v_doc1_1",
+            file_id=doc_id,
+            version_number=1,
+            content_hash="h1",
+            snapshot_text="Section 1 draft",
+            editor="alex.architect@company.com",
+        )
+    )
+    v2 = populated_storage.save_version(
+        DocumentVersion(
+            id="v_doc1_2",
+            file_id=doc_id,
+            version_number=2,
+            content_hash="h2",
+            snapshot_text="Section 1 draft\nSection 2 added",
+            editor="sarah.security@company.com",
+        )
+    )
+
+    # Insert diff
+    populated_storage.save_diff(
+        DocumentDiff(
+            id="d_doc1_1_2",
+            file_id=doc_id,
+            from_version_id=v1.id,
+            to_version_id=v2.id,
+            patch_text="@@ -1 +1,2 @@\n Section 1 draft\n+Section 2 added",
+            ai_summary="Sarah added Section 2.",
+            lines_added=1,
+            lines_removed=0,
+        )
+    )
+
+    # 1. Test GET /api/documents/{file_id}/versions
+    res_v = client.get(f"/api/documents/{doc_id}/versions")
+    assert res_v.status_code == 200
+    v_data = res_v.json()
+    assert v_data["file_id"] == doc_id
+    assert v_data["total"] == 2
+    assert len(v_data["items"]) == 2
+    assert v_data["items"][0]["version_number"] == 2
+    assert v_data["items"][0]["editor"] == "sarah.security@company.com"
+
+    # 2. Test GET /api/documents/{file_id}/diffs
+    res_d = client.get(f"/api/documents/{doc_id}/diffs")
+    assert res_d.status_code == 200
+    d_data = res_d.json()
+    assert d_data["file_id"] == doc_id
+    assert d_data["total"] == 1
+    assert len(d_data["items"]) == 1
+    assert d_data["items"][0]["ai_summary"] == "Sarah added Section 2."
+    assert d_data["items"][0]["lines_added"] == 1
+
+    # 3. Test 404 on non-existent document
+    res_404_v = client.get("/api/documents/non_existent_doc/versions")
+    assert res_404_v.status_code == 404
+
+    res_404_d = client.get("/api/documents/non_existent_doc/diffs")
+    assert res_404_d.status_code == 404
+

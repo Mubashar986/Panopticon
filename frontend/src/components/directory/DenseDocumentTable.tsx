@@ -7,6 +7,7 @@ interface DenseDocumentTableProps {
   sortBy: string;
   onSortChange: (newSort: string) => void;
   recentlyModifiedIds?: Set<string>;
+  onViewHistory?: (doc: DocumentResponseItem) => void;
 }
 
 function formatRelativeTime(dateString: string | null): string {
@@ -33,6 +34,7 @@ export function DenseDocumentTable({
   sortBy,
   onSortChange,
   recentlyModifiedIds = new Set(),
+  onViewHistory,
 }: DenseDocumentTableProps) {
   const [openExportMenuId, setOpenExportMenuId] = useState<string | null>(null);
 
@@ -201,6 +203,18 @@ export function DenseDocumentTable({
                 {/* Quick Actions */}
                 <td className="py-[var(--space-2)] px-[var(--space-4)] text-right whitespace-nowrap relative">
                   <div className="inline-flex items-center gap-1">
+                    {onViewHistory && (
+                      <button
+                        onClick={() => onViewHistory(doc)}
+                        className="p-1 text-[var(--color-text-secondary)] hover:text-indigo-600 dark:hover:text-indigo-400 rounded hover:bg-[var(--color-bg-surface-elevated)] transition-colors"
+                        title="View Version History & Diffs"
+                        aria-label="View Version History"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
+                    )}
                     {doc.view_url && (
                       <a
                         href={doc.view_url}

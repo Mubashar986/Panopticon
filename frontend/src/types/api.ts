@@ -156,3 +156,40 @@ export interface SystemStatusResponse {
   process_pid: number | null;
   details: Record<string, unknown>;
 }
+
+export interface DocumentVersion {
+  id: string;
+  file_id: string;
+  version_number: number;
+  content_hash: string;
+  editor: string | null;
+  modified_time: string | null;
+  char_count: number;
+  word_count: number;
+  created_at: string;
+}
+
+export interface DocumentDiff {
+  id: string;
+  file_id: string;
+  from_version_id: string | null;
+  to_version_id: string;
+  patch_text: string;
+  ai_summary: string | null;
+  lines_added: number;
+  lines_removed: number;
+  created_at: string;
+}
+
+export interface VersionHistoryResponse {
+  file_id: string;
+  total: number;
+  items: DocumentVersion[];
+}
+
+export interface DiffListResponse {
+  file_id: string;
+  total: number;
+  items: DocumentDiff[];
+}
+

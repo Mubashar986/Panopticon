@@ -6,9 +6,15 @@ import logging
 import time
 from typing import Literal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.api.deps import CrawlStorageDep, CurrentUser
+from app.api.schemas.diffs import (
+    DiffListResponse,
+    DocumentDiffResponse,
+    DocumentVersionResponse,
+    VersionHistoryResponse,
+)
 from app.api.schemas.documents import DocumentListResponse, DocumentResponseItem
 
 logger = logging.getLogger("panopticon.api.routes.documents")
@@ -114,3 +120,76 @@ def list_documents(
         processing_time_ms=round(processing_time_ms, 2),
         documents=document_dtos,
     )
+
+
+@router.get(
+    "/api/documents/{file_id}/versions",
+    response_model=VersionHistoryResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Document Version Snapshots",
+    description="Returns chronological version snapshot history for a tracked document.",
+    responses={
+        200: {"description": "Version snapshot history retrieved successfully"},
+        404: {"description": "Document not found"},
+    },
+)
+def get_document_versions(
+    file_id: str,
+    storage: CrawlStorageDep,
+    current_user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=100, description="Max snapshots to return"),
+    offset: int = Query(default=0, ge=0, description="Pagination offset"),
+) -> VersionHistoryResponse:
+    """Retrieve version snapshots for a document."""
+    file_record = storage.get_file(file_id)
+    if file_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID '{file_id}' not found.",
+        )
+
+    versions = storage.get_version_history(file_id, limit=limit, offset=offset)
+    total = storage.count_versions(file_id)
+
+    return VersionHistoryResponse(
+        file_id=file_id,
+        total=total,
+        items=[DocumentVersionResponse.model_validate(v) for v in versions],
+    )
+
+
+@router.get(
+    "/api/documents/{file_id}/diffs",
+    response_model=DiffListResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Get Document Revision Diffs",
+    description="Returns structured diff records and AI change summaries for a tracked document.",
+    responses={
+        200: {"description": "Diff delta history retrieved successfully"},
+        404: {"description": "Document not found"},
+    },
+)
+def get_document_diffs(
+    file_id: str,
+    storage: CrawlStorageDep,
+    current_user: CurrentUser,
+    limit: int = Query(default=50, ge=1, le=100, description="Max diffs to return"),
+    offset: int = Query(default=0, ge=0, description="Pagination offset"),
+) -> DiffListResponse:
+    """Retrieve diff records and AI summaries for a document."""
+    file_record = storage.get_file(file_id)
+    if file_record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID '{file_id}' not found.",
+        )
+
+    diffs = storage.get_diffs(file_id, limit=limit, offset=offset)
+    total = storage.count_diffs(file_id)
+
+    return DiffListResponse(
+        file_id=file_id,
+        total=total,
+        items=[DocumentDiffResponse.model_validate(d) for d in diffs],
+    )
+
