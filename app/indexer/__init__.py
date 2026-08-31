@@ -5,6 +5,7 @@ from app.indexer.crawler import (
     DEFAULT_DRIVE_FIELDS,
     DriveCrawler,
 )
+from app.indexer.diff import DiffEngine, get_diff_engine
 from app.indexer.exporter import (
     ContentExporter,
     ExportResult,
@@ -20,6 +21,7 @@ from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
     GOOGLE_SHEET_MIME_TYPE,
     CrawlStats,
+    DiffResult,
     DocumentDiff,
     DocumentVersion,
     DriveFileMetadata,
@@ -40,6 +42,8 @@ __all__ = [
     "ContentExporter",
     "CrawlStats",
     "CrawlStorage",
+    "DiffEngine",
+    "DiffResult",
     "DocumentDiff",
     "DocumentVersion",
     "DriveCrawler",
@@ -56,5 +60,6 @@ __all__ = [
     "SyncResult",
     "build_label_query",
     "get_crawl_storage",
+    "get_diff_engine",
     "sanitize_string",
 ]

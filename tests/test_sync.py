@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from app.indexer.exporter import ExportResult
 from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
     GOOGLE_SHEET_MIME_TYPE,
@@ -38,9 +39,12 @@ def test_sync_bootstrap_full_crawl(tmp_path: Path) -> None:
     ]
 
     mock_crawler.crawl_files.return_value = iter(files)
-    # Exporter attaches snippet
-    mock_exporter.export_and_attach.side_effect = lambda f: f.model_copy(
-        update={"content_snippet": f"Snippet for {f.name}", "export_status": "success"}
+    # Exporter attaches snippet and content text
+    mock_exporter.export_file_content.side_effect = lambda fid, mime: ExportResult(
+        file_id=fid,
+        status="success",
+        snippet=f"Snippet for {fid}",
+        content_text=f"Initial full content for {fid}\nSection 1",
     )
 
     sync_engine = IncrementalSyncEngine(
@@ -93,7 +97,12 @@ def test_sync_incremental_with_watermark(tmp_path: Path) -> None:
 
     # First call: active changed files; second call: trashed files (empty)
     mock_crawler.crawl_files.side_effect = [iter([new_file]), iter([])]
-    mock_exporter.export_and_attach.side_effect = lambda f: f
+    mock_exporter.export_file_content.side_effect = lambda fid, mime: ExportResult(
+        file_id=fid,
+        status="success",
+        snippet="snippet",
+        content_text="Sample text",
+    )
 
     sync_engine = IncrementalSyncEngine(
         crawler=mock_crawler,
@@ -135,7 +144,12 @@ def test_sync_deletion_detection_on_full_refresh(tmp_path: Path) -> None:
         DriveFileMetadata(id="f1", name="Active File", mime_type=GOOGLE_DOC_MIME_TYPE)
     ]
     mock_crawler.crawl_files.return_value = iter(active_remote)
-    mock_exporter.export_and_attach.side_effect = lambda f: f
+    mock_exporter.export_file_content.side_effect = lambda fid, mime: ExportResult(
+        file_id=fid,
+        status="success",
+        snippet="snippet",
+        content_text="Sample text",
+    )
 
     sync_engine = IncrementalSyncEngine(
         crawler=mock_crawler,
@@ -152,3 +166,79 @@ def test_sync_deletion_detection_on_full_refresh(tmp_path: Path) -> None:
     assert storage.count_files() == 1
     assert storage.get_file("f1") is not None
     assert storage.get_file("f2") is None
+
+
+def test_sync_creates_versions_and_diffs_on_content_change(tmp_path: Path) -> None:
+    """Test that consecutive sync runs on modified content generate versions and diff records."""
+    storage = CrawlStorage(db_path=tmp_path / "sync_diffs.db")
+    mock_crawler = MagicMock()
+    mock_exporter = MagicMock()
+
+    sync_engine = IncrementalSyncEngine(
+        crawler=mock_crawler,
+        exporter=mock_exporter,
+        storage=storage,
+    )
+
+    doc_id = "doc_diff_test"
+    file_v1 = DriveFileMetadata(
+        id=doc_id,
+        name="Spec Doc",
+        mime_type=GOOGLE_DOC_MIME_TYPE,
+        modified_time=datetime(2026, 8, 20, 10, 0, 0, tzinfo=timezone.utc),
+        last_modifying_user="alice@co.com",
+    )
+
+    # 1. First sync cycle: Initial version 1 snapshot created
+    mock_crawler.crawl_files.return_value = iter([file_v1])
+    mock_exporter.export_file_content.return_value = ExportResult(
+        file_id=doc_id,
+        status="success",
+        snippet="Line 1 preview",
+        content_text="Line 1: Spec Overview\nLine 2: Target Arch\n",
+    )
+
+    r1 = sync_engine.run_sync(full_refresh=True)
+    assert r1.added_count == 1
+    assert storage.count_versions(doc_id) == 1
+    assert storage.count_diffs(doc_id) == 0
+
+    v1 = storage.get_latest_version(doc_id)
+    assert v1 is not None
+    assert v1.version_number == 1
+    assert v1.editor == "alice@co.com"
+
+    # 2. Second sync cycle: Document modified, Version 2 + Diff created
+    file_v2 = file_v1.model_copy(
+        update={
+            "modified_time": datetime(2026, 8, 22, 14, 0, 0, tzinfo=timezone.utc),
+            "last_modifying_user": "bob@co.com",
+        }
+    )
+    mock_crawler.crawl_files.side_effect = [iter([file_v2]), iter([])]
+    mock_exporter.export_file_content.return_value = ExportResult(
+        file_id=doc_id,
+        status="success",
+        snippet="Line 1 preview",
+        content_text="Line 1: Spec Overview\nLine 2: Target Arch Modified\nLine 3: Extra Section\n",
+    )
+
+    r2 = sync_engine.run_sync(full_refresh=False)
+    assert r2.updated_count == 1
+    assert storage.count_versions(doc_id) == 2
+    assert storage.count_diffs(doc_id) == 1
+
+    v2 = storage.get_latest_version(doc_id)
+    assert v2 is not None
+    assert v2.version_number == 2
+    assert v2.editor == "bob@co.com"
+
+    diffs = storage.get_diffs(doc_id)
+    assert len(diffs) == 1
+    assert diffs[0].from_version_id == v1.id
+    assert diffs[0].to_version_id == v2.id
+    assert diffs[0].lines_added == 2
+    assert diffs[0].lines_removed == 1
+    assert "-Line 2: Target Arch" in diffs[0].patch_text
+    assert "+Line 2: Target Arch Modified" in diffs[0].patch_text
+

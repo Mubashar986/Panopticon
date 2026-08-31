@@ -388,3 +388,26 @@ class DocumentDiff(BaseModel):
         return v
 
 
+class DiffResult(BaseModel):
+    """Structured outcome of a text diff computation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    has_changes: bool = Field(
+        ..., description="Whether differences exist between old and new text"
+    )
+    patch_text: str = Field(
+        default="", description="Unified diff patch string"
+    )
+    lines_added: int = Field(
+        default=0, description="Total count of added lines (+)"
+    )
+    lines_removed: int = Field(
+        default=0, description="Total count of deleted lines (-)"
+    )
+    hunks_count: int = Field(
+        default=0, description="Number of distinct diff hunks (@@ blocks)"
+    )
+
+
+

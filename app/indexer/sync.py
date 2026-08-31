@@ -1,15 +1,17 @@
-"""Incremental Synchronization Coordinator with Watermarks and Deletion Detection."""
-
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 
 from app.core.logging import get_logger
 from app.indexer.crawler import DEFAULT_DOCS_SHEETS_QUERY, DriveCrawler
+from app.indexer.diff import DiffEngine
 from app.indexer.exporter import ContentExporter
 from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
     GOOGLE_SHEET_MIME_TYPE,
+    DocumentDiff,
+    DocumentVersion,
     DriveFileMetadata,
     SyncResult,
 )
@@ -26,6 +28,7 @@ class IncrementalSyncEngine:
         crawler: DriveCrawler | None = None,
         exporter: ContentExporter | None = None,
         storage: CrawlStorage | None = None,
+        diff_engine: DiffEngine | None = None,
     ) -> None:
         """Initialize IncrementalSyncEngine with injected dependencies.
 
@@ -33,10 +36,12 @@ class IncrementalSyncEngine:
             crawler: Optional DriveCrawler instance.
             exporter: Optional ContentExporter instance.
             storage: Optional CrawlStorage repository instance.
+            diff_engine: Optional DiffEngine instance.
         """
         self.crawler = crawler if crawler is not None else DriveCrawler()
         self.exporter = exporter if exporter is not None else ContentExporter()
         self.storage = storage if storage is not None else CrawlStorage()
+        self.diff_engine = diff_engine if diff_engine is not None else DiffEngine()
 
     def run_sync(
         self,
@@ -93,18 +98,67 @@ class IncrementalSyncEngine:
             else:
                 added_count += 1
 
-            # Extract snippet if requested
-            file_to_save: DriveFileMetadata
+            # Extract content, save file record, and handle version snapshots / diffs
             if export_content:
-                file_to_save = self.exporter.export_and_attach(raw_file)
+                export_res = self.exporter.export_file_content(raw_file.id, raw_file.mime_type)
+                file_to_save = raw_file.model_copy(
+                    update={
+                        "content_snippet": export_res.snippet,
+                        "export_status": export_res.status,
+                    }
+                )
+                self.storage.upsert_file(file_to_save, last_seen_at=sync_start_time)
+
+                if export_res.content_text is not None:
+                    new_text = export_res.content_text
+                    new_hash = hashlib.sha256(new_text.encode("utf-8")).hexdigest()
+                    prev_ver = self.storage.get_latest_version(file_id)
+
+                    if prev_ver is None:
+                        self.storage.save_version(
+                            DocumentVersion(
+                                file_id=file_id,
+                                version_number=1,
+                                content_hash=new_hash,
+                                snapshot_text=new_text,
+                                modified_time=raw_file.modified_time,
+                                editor=raw_file.last_modifying_user,
+                            )
+                        )
+                    elif prev_ver.content_hash != new_hash:
+                        diff_res = self.diff_engine.compute_diff(
+                            prev_ver.snapshot_text,
+                            new_text,
+                            from_label=f"v{prev_ver.version_number}",
+                            to_label=f"v{prev_ver.version_number + 1}",
+                        )
+                        new_ver = self.storage.save_version(
+                            DocumentVersion(
+                                file_id=file_id,
+                                version_number=prev_ver.version_number + 1,
+                                content_hash=new_hash,
+                                snapshot_text=new_text,
+                                modified_time=raw_file.modified_time,
+                                editor=raw_file.last_modifying_user,
+                            )
+                        )
+                        if diff_res.has_changes:
+                            self.storage.save_diff(
+                                DocumentDiff(
+                                    file_id=file_id,
+                                    from_version_id=prev_ver.id,
+                                    to_version_id=new_ver.id,
+                                    patch_text=diff_res.patch_text,
+                                    lines_added=diff_res.lines_added,
+                                    lines_removed=diff_res.lines_removed,
+                                )
+                            )
             else:
                 file_to_save = raw_file
-
-            batch.append(file_to_save)
-
-            if len(batch) >= 50:
-                self.storage.upsert_files(batch, last_seen_at=sync_start_time)
-                batch.clear()
+                batch.append(file_to_save)
+                if len(batch) >= 50:
+                    self.storage.upsert_files(batch, last_seen_at=sync_start_time)
+                    batch.clear()
 
         # Upsert remaining buffer
         if batch:
