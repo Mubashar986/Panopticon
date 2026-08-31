@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Protocol
+from typing import Any, Protocol
 
 import httpx
 
@@ -13,10 +13,10 @@ from app.core.logging import get_logger
 logger = get_logger("panopticon.indexer.summarizer")
 
 DEFAULT_SYSTEM_PROMPT = (
-    "You are Panopticon's change summarizer. Summarize what changed in the provided document "
-    "diff in exactly one concise, plain-English sentence. Focus on what was added, removed, or "
-    "modified. Do not include markdown code fences, greetings, conversational filler, or quotes. "
-    "Output only the single summary sentence."
+    "You are Panopticon's document change auditor. Directly state what changed in the provided document "
+    "diff in exactly one concise, natural, plain-English sentence. "
+    "Do not repeat the prompt, do not list metadata, and do not explain your reasoning. "
+    "Output ONLY the final summary sentence."
 )
 
 
@@ -121,9 +121,9 @@ class OpenRouterSummarizer:
             truncated_patch += "\n... [diff truncated for length]"
 
         user_content = (
-            f"File: {file_name}\n"
-            f"Editor: {editor or 'Unknown'}\n"
-            f"Diff Patch:\n{truncated_patch}"
+            f"State in one sentence what changed in '{file_name}' edited by {editor or 'the user'}:\n\n"
+            f"{truncated_patch}\n\n"
+            f"One-sentence change summary:"
         )
 
         headers = {
@@ -133,15 +133,19 @@ class OpenRouterSummarizer:
             "X-Title": "Panopticon Document Intelligence",
         }
 
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ],
-            "max_tokens": 120,
-            "temperature": 0.2,
+            "max_tokens": 200,
+            "temperature": 0.1,
         }
+
+        # Send reasoning parameter only for explicit reasoning models to avoid 400 Bad Request on standard APIs
+        if any(r in self.model.lower() for r in ["deepseek-r1", "qwq", "o1", "o3"]):
+            payload["reasoning"] = {"exclude": True}
 
         try:
             with httpx.Client(timeout=self.timeout_seconds) as client:
@@ -165,34 +169,56 @@ class OpenRouterSummarizer:
 
     @staticmethod
     def _clean_summary(text: str) -> str:
-        """Sanitize LLM output to ensure a single clean declarative sentence."""
-        # Strip <think>...</think> reasoning blocks if present (flags=re.DOTALL)
+        """Sanitize LLM output to ensure a clean, complete declarative sentence."""
+        # Strip <think>...</think> reasoning blocks if present
         cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
-        # Strip code blocks or quotes
+        # Strip markdown code fences
         cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned).strip()
         cleaned = re.sub(r"```$", "", cleaned).strip()
         cleaned = cleaned.strip('"\'`')
 
-        # Filter out reasoning/filler lines (e.g. "Here's a thinking process:", "Thinking:")
         lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
         valid_lines: list[str] = []
+
         for line in lines:
-            lower = line.lower()
-            if any(lower.startswith(p) for p in ["here's a thinking", "thinking process", "thinking:", "here is a summary", "summary:"]):
+            # Strip markdown list markers and step headers
+            line_clean = re.sub(r"^\d+\.\s+(\*\*)?", "", line).strip()
+            lower = line_clean.lower()
+            if any(lower.startswith(p) for p in [
+                "here's a thinking",
+                "thinking process",
+                "thinking:",
+                "analyze user",
+                "analysis:",
+                "step ",
+                "here is a summary",
+                "summary:",
+                "- role:",
+                "- task:",
+                "- input document:",
+                "- constraint:",
+                "- diff format:",
+                "- source file:",
+                "- diff content:",
+            ]):
                 continue
-            valid_lines.append(line)
+            if line_clean:
+                valid_lines.append(line_clean)
 
         if not valid_lines:
             return ""
 
-        # Take the best declarative line
-        summary = valid_lines[-1] if len(valid_lines) > 1 and len(valid_lines[0]) < 25 else valid_lines[0]
-        summary = summary.strip('"\'`* ')
-        if not summary.endswith((".", "!", "?")):
-            summary += "."
+        # Take all valid summary lines and clean markdown bold/italic tags
+        joined = " ".join(valid_lines)
+        joined = re.sub(r"\*\*|\*|`", "", joined).strip()
+        joined = joined.strip('"\' ')
 
-        return summary[:300]
+        # Ensure sentence termination
+        if not joined.endswith((".", "!", "?")):
+            joined += "."
+
+        return joined[:400]
 
 
 def get_change_summarizer(settings: Settings | None = None) -> ChangeSummarizer:

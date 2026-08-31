@@ -53,13 +53,17 @@ export function DiffViewer({ diff, fromVersionNumber, toVersionNumber }: DiffVie
 
       {/* AI Semantic Summary Banner */}
       {diff.ai_summary && (
-        <div className="px-4 py-2.5 bg-indigo-950/60 border-b border-indigo-800/60 flex items-start space-x-2.5">
-          <svg className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          <div className="text-xs text-indigo-200 leading-relaxed">
-            <span className="font-semibold text-indigo-300 mr-1.5">AI Summary:</span>
-            {diff.ai_summary}
+        <div className="px-4 py-3 bg-indigo-950/70 border-b border-indigo-800/80 flex items-start space-x-3">
+          <div className="p-1 rounded bg-indigo-900/80 text-indigo-300 shrink-0 mt-0.5 shadow-sm">
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+          </div>
+          <div className="text-xs text-indigo-100 leading-relaxed break-words flex-1">
+            <span className="font-semibold text-indigo-300 uppercase tracking-wider text-[10px] mr-2 px-1.5 py-0.5 rounded bg-indigo-900/60 border border-indigo-700/50">
+              AI Change Summary
+            </span>
+            <span className="text-indigo-100 font-normal">{diff.ai_summary}</span>
           </div>
         </div>
       )}
