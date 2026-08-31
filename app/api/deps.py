@@ -8,6 +8,7 @@ from fastapi import Depends
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.services.sync_manager import SyncManager, get_sync_manager
+from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.search.client import PanopticonSearchClient, get_search_client
 from app.search.service import SearchService, get_search_service
 
@@ -62,8 +63,15 @@ def get_sync_manager_dep() -> SyncManager:
     return get_sync_manager()
 
 
+def get_crawl_storage_dep() -> CrawlStorage:
+    """Provide the CrawlStorage repository instance."""
+    return get_crawl_storage()
+
+
 # Type aliases for clean FastAPI route parameter annotations
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 SearchServiceDep = Annotated[SearchService, Depends(get_search_service_dep)]
 SearchClientDep = Annotated[PanopticonSearchClient, Depends(get_search_client_dep)]
 SyncManagerDep = Annotated[SyncManager, Depends(get_sync_manager_dep)]
+CrawlStorageDep = Annotated[CrawlStorage, Depends(get_crawl_storage_dep)]
+

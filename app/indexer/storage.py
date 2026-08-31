@@ -382,7 +382,91 @@ class CrawlStorage:
             row = cursor.fetchone()
             return int(row["count"]) if row else 0
 
+    def list_documents_paginated(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "modified_time:desc",
+        file_type: str | None = None,
+        mime_type: str | None = None,
+        sharing_status: str | None = None,
+        project_tag: str | None = None,
+        primary_owner: str | None = None,
+    ) -> tuple[list[DriveFileMetadata], int]:
+        """List active file records with parameterized filtering, sorting, and total count.
+
+        Args:
+            limit: Number of records to return.
+            offset: Record offset for pagination.
+            sort_by: Sorting field and direction (e.g. 'modified_time:desc', 'name:asc').
+            file_type: Optional category filter ('document', 'spreadsheet', 'other').
+            mime_type: Optional exact MIME type filter.
+            sharing_status: Optional sharing status filter ('private', 'shared', 'domain', 'anyone').
+            project_tag: Optional tag filter (searches within project_tags_json).
+            primary_owner: Optional owner email filter.
+
+        Returns:
+            tuple[list[DriveFileMetadata], int]: (matching_items_page, total_matching_count).
+        """
+        where_clauses: list[str] = ["trashed = 0"]
+        params: list[Any] = []
+
+        if mime_type:
+            where_clauses.append("mime_type = ?")
+            params.append(mime_type)
+        elif file_type:
+            if file_type == "document":
+                where_clauses.append("mime_type = 'application/vnd.google-apps.document'")
+            elif file_type == "spreadsheet":
+                where_clauses.append("mime_type = 'application/vnd.google-apps.spreadsheet'")
+            elif file_type == "other":
+                where_clauses.append(
+                    "mime_type NOT IN ('application/vnd.google-apps.document', 'application/vnd.google-apps.spreadsheet')"
+                )
+
+        if sharing_status:
+            where_clauses.append("sharing_status = ?")
+            params.append(sharing_status)
+
+        if project_tag:
+            where_clauses.append("project_tags_json LIKE ?")
+            params.append(f'%"{project_tag.strip()}"%')
+
+        if primary_owner:
+            where_clauses.append("owners_json LIKE ?")
+            params.append(f"%{primary_owner.strip()}%")
+
+        where_sql = " AND ".join(where_clauses)
+
+        # Sort order whitelist mapping
+        sort_map = {
+            "modified_time:desc": "modified_time DESC NULLS LAST",
+            "modified_time:asc": "modified_time ASC NULLS LAST",
+            "name:asc": "name COLLATE NOCASE ASC",
+            "name:desc": "name COLLATE NOCASE DESC",
+            "created_time:desc": "created_time DESC NULLS LAST",
+            "created_time:asc": "created_time ASC NULLS LAST",
+        }
+        order_by_clause = sort_map.get(sort_by, "modified_time DESC NULLS LAST")
+
+        count_sql = f"SELECT COUNT(*) as total FROM file_records WHERE {where_sql}"
+        data_sql = f"SELECT * FROM file_records WHERE {where_sql} ORDER BY {order_by_clause} LIMIT ? OFFSET ?"
+
+        with self.get_connection() as conn:
+            # 1. Total matching count
+            count_cursor = conn.execute(count_sql, params)
+            count_row = count_cursor.fetchone()
+            total_count = int(count_row["total"]) if count_row else 0
+
+            # 2. Paginated rows
+            data_params = list(params) + [limit, offset]
+            data_cursor = conn.execute(data_sql, data_params)
+            items = [self._row_to_model(row) for row in data_cursor.fetchall()]
+
+        return items, total_count
+
 
 def get_crawl_storage(db_path: str | Path | None = None) -> CrawlStorage:
     """Factory helper returning an initialized CrawlStorage instance."""
     return CrawlStorage(db_path=db_path)
+
