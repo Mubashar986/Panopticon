@@ -11,6 +11,8 @@ from typing import Any
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.indexer.models import (
+    DocumentDiff,
+    DocumentVersion,
     DriveFileMetadata,
     DriveLabel,
     DrivePermission,
@@ -82,10 +84,46 @@ class CrawlStorage:
                     last_seen_at TEXT NOT NULL
                 );
 
+                CREATE TABLE IF NOT EXISTS document_versions (
+                    id TEXT PRIMARY KEY,
+                    file_id TEXT NOT NULL,
+                    version_number INTEGER NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    snapshot_text TEXT NOT NULL,
+                    modified_time TEXT,
+                    editor TEXT,
+                    char_count INTEGER NOT NULL DEFAULT 0,
+                    word_count INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (file_id) REFERENCES file_records(id) ON DELETE CASCADE,
+                    UNIQUE(file_id, version_number)
+                );
+
+                CREATE TABLE IF NOT EXISTS document_diffs (
+                    id TEXT PRIMARY KEY,
+                    file_id TEXT NOT NULL,
+                    from_version_id TEXT,
+                    to_version_id TEXT NOT NULL,
+                    patch_text TEXT NOT NULL,
+                    ai_summary TEXT,
+                    lines_added INTEGER NOT NULL DEFAULT 0,
+                    lines_removed INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (file_id) REFERENCES file_records(id) ON DELETE CASCADE,
+                    FOREIGN KEY (from_version_id) REFERENCES document_versions(id) ON DELETE SET NULL,
+                    FOREIGN KEY (to_version_id) REFERENCES document_versions(id) ON DELETE CASCADE
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_file_modified_time ON file_records(modified_time);
                 CREATE INDEX IF NOT EXISTS idx_file_sharing_status ON file_records(sharing_status);
                 CREATE INDEX IF NOT EXISTS idx_file_trashed ON file_records(trashed);
                 CREATE INDEX IF NOT EXISTS idx_file_last_seen_at ON file_records(last_seen_at);
+
+                CREATE INDEX IF NOT EXISTS idx_versions_file_id ON document_versions(file_id);
+                CREATE INDEX IF NOT EXISTS idx_versions_file_version ON document_versions(file_id, version_number DESC);
+                CREATE INDEX IF NOT EXISTS idx_versions_content_hash ON document_versions(content_hash);
+                CREATE INDEX IF NOT EXISTS idx_diffs_file_id ON document_diffs(file_id);
+                CREATE INDEX IF NOT EXISTS idx_diffs_versions ON document_diffs(from_version_id, to_version_id);
                 """
             )
         logger.debug("Initialized SQLite storage schema at %s", self.db_path)
@@ -464,6 +502,308 @@ class CrawlStorage:
             items = [self._row_to_model(row) for row in data_cursor.fetchall()]
 
         return items, total_count
+
+    def _version_model_to_row(self, v: DocumentVersion) -> tuple[Any, ...]:
+        """Serialize DocumentVersion to database row tuple."""
+        mod_time = (
+            v.modified_time.astimezone(timezone.utc).isoformat()
+            if v.modified_time
+            else None
+        )
+        created_iso = v.created_at.astimezone(timezone.utc).isoformat()
+        char_count = v.char_count or len(v.snapshot_text)
+        word_count = v.word_count or len(v.snapshot_text.split())
+        return (
+            v.id,
+            v.file_id,
+            v.version_number,
+            v.content_hash,
+            v.snapshot_text,
+            mod_time,
+            v.editor,
+            char_count,
+            word_count,
+            created_iso,
+        )
+
+    def _row_to_version_model(self, row: sqlite3.Row) -> DocumentVersion:
+        """Deserialize an SQLite Row into a validated DocumentVersion domain entity."""
+        mod_time = (
+            datetime.fromisoformat(row["modified_time"].replace("Z", "+00:00"))
+            if row["modified_time"]
+            else None
+        )
+        created_at = (
+            datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+            if row["created_at"]
+            else datetime.now(timezone.utc)
+        )
+        return DocumentVersion(
+            id=row["id"],
+            file_id=row["file_id"],
+            version_number=row["version_number"],
+            content_hash=row["content_hash"],
+            snapshot_text=row["snapshot_text"],
+            modified_time=mod_time,
+            editor=row["editor"],
+            char_count=row["char_count"],
+            word_count=row["word_count"],
+            created_at=created_at,
+        )
+
+    def _diff_model_to_row(self, d: DocumentDiff) -> tuple[Any, ...]:
+        """Serialize DocumentDiff to database row tuple."""
+        created_iso = d.created_at.astimezone(timezone.utc).isoformat()
+        return (
+            d.id,
+            d.file_id,
+            d.from_version_id,
+            d.to_version_id,
+            d.patch_text,
+            d.ai_summary,
+            d.lines_added,
+            d.lines_removed,
+            created_iso,
+        )
+
+    def _row_to_diff_model(self, row: sqlite3.Row) -> DocumentDiff:
+        """Deserialize an SQLite Row into a validated DocumentDiff domain entity."""
+        created_at = (
+            datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+            if row["created_at"]
+            else datetime.now(timezone.utc)
+        )
+        return DocumentDiff(
+            id=row["id"],
+            file_id=row["file_id"],
+            from_version_id=row["from_version_id"],
+            to_version_id=row["to_version_id"],
+            patch_text=row["patch_text"],
+            ai_summary=row["ai_summary"],
+            lines_added=row["lines_added"],
+            lines_removed=row["lines_removed"],
+            created_at=created_at,
+        )
+
+    def save_version(self, version: DocumentVersion) -> DocumentVersion:
+        """Persist a new immutable document version snapshot.
+
+        If version_number <= 0, automatically assigns next monotonic version number.
+
+        Args:
+            version: DocumentVersion instance to store.
+
+        Returns:
+            DocumentVersion: The stored version entity with updated fields if calculated.
+        """
+        with self.get_connection() as conn:
+            # If version number is <= 0, check if existing versions exist to increment
+            version_num = version.version_number
+            if version_num <= 0:
+                cursor = conn.execute(
+                    "SELECT COALESCE(MAX(version_number), 0) + 1 AS next_ver FROM document_versions WHERE file_id = ?",
+                    (version.file_id,),
+                )
+                row = cursor.fetchone()
+                version_num = int(row["next_ver"]) if row else 1
+
+            char_count = version.char_count or len(version.snapshot_text)
+            word_count = version.word_count or len(version.snapshot_text.split())
+
+            version_to_save = version.model_copy(
+                update={
+                    "version_number": version_num,
+                    "char_count": char_count,
+                    "word_count": word_count,
+                }
+            )
+
+            row_tuple = self._version_model_to_row(version_to_save)
+            conn.execute(
+                """
+                INSERT INTO document_versions (
+                    id, file_id, version_number, content_hash, snapshot_text,
+                    modified_time, editor, char_count, word_count, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    snapshot_text = excluded.snapshot_text,
+                    content_hash = excluded.content_hash,
+                    modified_time = excluded.modified_time,
+                    editor = excluded.editor,
+                    char_count = excluded.char_count,
+                    word_count = excluded.word_count
+                """,
+                row_tuple,
+            )
+
+        logger.debug(
+            "Saved document version snapshot '%s' (ver=%d, file=%s)",
+            version_to_save.id,
+            version_to_save.version_number,
+            version_to_save.file_id,
+        )
+        return version_to_save
+
+    def get_latest_version(self, file_id: str) -> DocumentVersion | None:
+        """Retrieve the most recent version snapshot for a given file.
+
+        Args:
+            file_id: Google Drive unique file ID.
+
+        Returns:
+            DocumentVersion | None: Most recent version snapshot or None.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM document_versions WHERE file_id = ? ORDER BY version_number DESC LIMIT 1",
+                (file_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_version_model(row)
+        return None
+
+    def get_version(self, version_id: str) -> DocumentVersion | None:
+        """Lookup a specific version snapshot by its unique ID.
+
+        Args:
+            version_id: Unique version ID (e.g. 'ver_xxx').
+
+        Returns:
+            DocumentVersion | None: Found domain entity or None.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM document_versions WHERE id = ?", (version_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_version_model(row)
+        return None
+
+    def get_version_history(
+        self, file_id: str, limit: int = 50, offset: int = 0
+    ) -> list[DocumentVersion]:
+        """Retrieve paginated chronological version history for a file (newest first).
+
+        Args:
+            file_id: Google Drive unique file ID.
+            limit: Maximum version records to return.
+            offset: Record offset for pagination.
+
+        Returns:
+            list[DocumentVersion]: List of version snapshots ordered by version_number DESC.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM document_versions WHERE file_id = ? ORDER BY version_number DESC LIMIT ? OFFSET ?",
+                (file_id, limit, offset),
+            )
+            return [self._row_to_version_model(row) for row in cursor.fetchall()]
+
+    def count_versions(self, file_id: str | None = None) -> int:
+        """Return total count of version snapshots stored (optionally filtered by file_id)."""
+        with self.get_connection() as conn:
+            if file_id is not None:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) as count FROM document_versions WHERE file_id = ?",
+                    (file_id,),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) as count FROM document_versions"
+                )
+            row = cursor.fetchone()
+            return int(row["count"]) if row else 0
+
+    def save_diff(self, diff: DocumentDiff) -> DocumentDiff:
+        """Persist a structured document difference record.
+
+        Args:
+            diff: DocumentDiff instance to store.
+
+        Returns:
+            DocumentDiff: Stored diff entity.
+        """
+        row_tuple = self._diff_model_to_row(diff)
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO document_diffs (
+                    id, file_id, from_version_id, to_version_id, patch_text,
+                    ai_summary, lines_added, lines_removed, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    patch_text = excluded.patch_text,
+                    ai_summary = excluded.ai_summary,
+                    lines_added = excluded.lines_added,
+                    lines_removed = excluded.lines_removed
+                """,
+                row_tuple,
+            )
+        logger.debug(
+            "Saved document diff '%s' for file %s (from=%s, to=%s)",
+            diff.id,
+            diff.file_id,
+            diff.from_version_id,
+            diff.to_version_id,
+        )
+        return diff
+
+    def get_diffs(
+        self, file_id: str, limit: int = 50, offset: int = 0
+    ) -> list[DocumentDiff]:
+        """Retrieve paginated diff history for a given file ordered by newest first.
+
+        Args:
+            file_id: Google Drive unique file ID.
+            limit: Maximum diff records to return.
+            offset: Record offset for pagination.
+
+        Returns:
+            list[DocumentDiff]: List of diff delta records.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM document_diffs WHERE file_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
+                (file_id, limit, offset),
+            )
+            return [self._row_to_diff_model(row) for row in cursor.fetchall()]
+
+    def get_diff_between(
+        self, from_version_id: str, to_version_id: str
+    ) -> DocumentDiff | None:
+        """Lookup a specific pre-computed diff record between two versions.
+
+        Args:
+            from_version_id: Origin version snapshot ID.
+            to_version_id: Destination version snapshot ID.
+
+        Returns:
+            DocumentDiff | None: Matching diff record or None.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM document_diffs WHERE from_version_id = ? AND to_version_id = ?",
+                (from_version_id, to_version_id),
+            )
+            row = cursor.fetchone()
+            if row:
+                return self._row_to_diff_model(row)
+        return None
+
+    def count_diffs(self, file_id: str | None = None) -> int:
+        """Return total count of diff records stored (optionally filtered by file_id)."""
+        with self.get_connection() as conn:
+            if file_id is not None:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) as count FROM document_diffs WHERE file_id = ?",
+                    (file_id,),
+                )
+            else:
+                cursor = conn.execute("SELECT COUNT(*) as count FROM document_diffs")
+            row = cursor.fetchone()
+            return int(row["count"]) if row else 0
 
 
 def get_crawl_storage(db_path: str | Path | None = None) -> CrawlStorage:

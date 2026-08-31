@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Literal
 
@@ -294,4 +295,96 @@ class SyncResult(BaseModel):
     watermark_used: datetime | None = Field(default=None, description="Watermark timestamp used for delta query")
     new_watermark: datetime = Field(..., description="New watermark timestamp committed")
     is_full_refresh: bool = Field(default=False, description="Whether this was a full bootstrap sync")
+
+
+class DocumentVersion(BaseModel):
+    """Immutable snapshot of a document at a specific point in time."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"ver_{uuid.uuid4().hex[:12]}",
+        description="Unique version snapshot ID",
+    )
+    file_id: str = Field(..., description="Google Drive unique file ID")
+    version_number: int = Field(
+        default=1, description="1-indexed monotonic version number for this file"
+    )
+    content_hash: str = Field(..., description="SHA-256 hex digest of snapshot text")
+    snapshot_text: str = Field(
+        ..., description="Sanitized plain text content of document at this version"
+    )
+    modified_time: datetime | None = Field(
+        default=None, description="Google Drive UTC modified timestamp"
+    )
+    editor: str | None = Field(
+        default=None, description="User who made the modification"
+    )
+    char_count: int = Field(
+        default=0, description="Character count of snapshot text"
+    )
+    word_count: int = Field(
+        default=0, description="Word count of snapshot text"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Local ingestion timestamp (UTC)",
+    )
+
+    @field_validator("id", "file_id", "content_hash", "editor", mode="before")
+    @classmethod
+    def clean_version_strings(cls, v: Any) -> Any:
+        """Strip control characters and whitespace from string fields."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+    @field_validator("snapshot_text", mode="before")
+    @classmethod
+    def clean_snapshot_text(cls, v: Any) -> Any:
+        """Sanitize snapshot text."""
+        if isinstance(v, str):
+            return sanitize_string(v) or ""
+        return v
+
+
+class DocumentDiff(BaseModel):
+    """Structured delta record between two document versions."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"diff_{uuid.uuid4().hex[:12]}",
+        description="Unique diff record ID",
+    )
+    file_id: str = Field(..., description="Google Drive unique file ID")
+    from_version_id: str | None = Field(
+        default=None,
+        description="Prior version ID (None for initial version)",
+    )
+    to_version_id: str = Field(..., description="Target version ID")
+    patch_text: str = Field(..., description="Unified diff patch text")
+    ai_summary: str | None = Field(
+        default=None,
+        description="Natural language summary of modifications",
+    )
+    lines_added: int = Field(
+        default=0, description="Number of added lines in patch"
+    )
+    lines_removed: int = Field(
+        default=0, description="Number of removed lines in patch"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Local diff generation timestamp (UTC)",
+    )
+
+    @field_validator("id", "file_id", "from_version_id", "to_version_id", "ai_summary", mode="before")
+    @classmethod
+    def clean_diff_strings(cls, v: Any) -> Any:
+        """Strip control characters from identifier and summary strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
 
