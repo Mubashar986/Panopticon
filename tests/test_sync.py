@@ -13,6 +13,7 @@ from app.indexer.models import (
     DriveFileMetadata,
 )
 from app.indexer.storage import CrawlStorage
+from app.indexer.summarizer import HeuristicSummarizer
 from app.indexer.sync import IncrementalSyncEngine
 
 
@@ -178,6 +179,7 @@ def test_sync_creates_versions_and_diffs_on_content_change(tmp_path: Path) -> No
         crawler=mock_crawler,
         exporter=mock_exporter,
         storage=storage,
+        summarizer=HeuristicSummarizer(),
     )
 
     doc_id = "doc_diff_test"

@@ -166,17 +166,29 @@ class OpenRouterSummarizer:
     @staticmethod
     def _clean_summary(text: str) -> str:
         """Sanitize LLM output to ensure a single clean declarative sentence."""
+        # Strip <think>...</think> reasoning blocks if present (flags=re.DOTALL)
+        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
         # Strip code blocks or quotes
-        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", text).strip()
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned).strip()
         cleaned = re.sub(r"```$", "", cleaned).strip()
         cleaned = cleaned.strip('"\'`')
 
-        # Take first non-empty line
+        # Filter out reasoning/filler lines (e.g. "Here's a thinking process:", "Thinking:")
         lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
-        if not lines:
+        valid_lines: list[str] = []
+        for line in lines:
+            lower = line.lower()
+            if any(lower.startswith(p) for p in ["here's a thinking", "thinking process", "thinking:", "here is a summary", "summary:"]):
+                continue
+            valid_lines.append(line)
+
+        if not valid_lines:
             return ""
 
-        summary = lines[0]
+        # Take the best declarative line
+        summary = valid_lines[-1] if len(valid_lines) > 1 and len(valid_lines[0]) < 25 else valid_lines[0]
+        summary = summary.strip('"\'`* ')
         if not summary.endswith((".", "!", "?")):
             summary += "."
 
