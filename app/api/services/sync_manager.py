@@ -16,6 +16,7 @@ from app.api.schemas.sync import (
     SyncStatusResponse,
     SyncTriggerResponse,
 )
+from app.api.services.event_bus import get_sync_event_bus
 from app.core.auth.factory import get_auth_provider
 from app.core.config import get_settings
 from app.indexer.crawler import DriveCrawler
@@ -24,6 +25,7 @@ from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.indexer.sync import IncrementalSyncEngine
 from app.search.client import get_search_client
 from app.search.ingestion import SearchIngestionEngine
+
 
 logger = logging.getLogger("panopticon.api.sync_manager")
 
@@ -152,6 +154,15 @@ class SyncManager:
         worker_thread.start()
 
         mode_desc = "Full re-crawl" if full_refresh else "Incremental sync"
+        get_sync_event_bus().publish(
+            "sync_started",
+            {
+                "job_id": job_uuid,
+                "sync_mode": mode,
+                "full_refresh": full_refresh,
+                "message": f"{mode_desc} initiated.",
+            },
+        )
         return SyncTriggerResponse(
             status="started",
             message=f"{mode_desc} initiated successfully in background.",
@@ -188,6 +199,10 @@ class SyncManager:
         )
         worker_thread.start()
 
+        get_sync_event_bus().publish(
+            "reindex_started",
+            {"job_id": job_uuid, "sync_mode": "reindex", "message": "Search re-indexing initiated."},
+        )
         return ReindexResponse(
             status="started",
             message="Local search re-indexing initiated in background.",
@@ -199,6 +214,11 @@ class SyncManager:
         with self._lock:
             self._current_phase = phase
             self._progress_message = message
+            job_id = self._job_id
+        get_sync_event_bus().publish(
+            "sync_progress",
+            {"job_id": job_id, "phase": phase, "message": message},
+        )
 
     def _run_sync_worker(
         self,
@@ -288,6 +308,18 @@ class SyncManager:
                 self._last_stats = final_stats
                 self._last_error = None
 
+            get_sync_event_bus().publish(
+                "sync_completed",
+                {
+                    "job_id": job_id,
+                    "sync_mode": mode,
+                    "added": drive_res.added_count,
+                    "updated": drive_res.updated_count,
+                    "deleted": drive_res.deleted_count,
+                    "total_stored": drive_res.total_stored,
+                    "duration_seconds": total_duration,
+                },
+            )
             logger.info("Background sync job [%s] finished in %.2fs", job_id, total_duration)
 
         except Exception as exc:
@@ -301,6 +333,11 @@ class SyncManager:
                 self._progress_message = f"Sync failed: {err_msg}"
                 self._duration_seconds = total_duration
                 self._last_error = err_msg
+
+            get_sync_event_bus().publish(
+                "sync_failed",
+                {"job_id": job_id, "error": err_msg, "duration_seconds": total_duration},
+            )
 
     def _run_reindex_worker(self, job_id: str) -> None:
         """Internal worker executing SQLite to Meilisearch re-indexing."""
@@ -348,6 +385,17 @@ class SyncManager:
                 self._last_stats = final_stats
                 self._last_error = None
 
+            get_sync_event_bus().publish(
+                "sync_completed",
+                {
+                    "job_id": job_id,
+                    "sync_mode": "reindex",
+                    "indexed": ingest_res.indexed_count,
+                    "deleted": ingest_res.deleted_count,
+                    "total_stored": ingest_res.total_stored,
+                    "duration_seconds": total_duration,
+                },
+            )
             logger.info("Re-indexing job [%s] finished in %.2fs", job_id, total_duration)
 
         except Exception as exc:
@@ -361,6 +409,12 @@ class SyncManager:
                 self._progress_message = f"Re-indexing failed: {err_msg}"
                 self._duration_seconds = total_duration
                 self._last_error = err_msg
+
+            get_sync_event_bus().publish(
+                "sync_failed",
+                {"job_id": job_id, "error": err_msg, "duration_seconds": total_duration},
+            )
+
 
 
 def get_sync_manager() -> SyncManager:
