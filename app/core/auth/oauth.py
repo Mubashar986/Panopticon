@@ -43,7 +43,27 @@ class PersonalOAuthProvider(DriveAuthProvider):
     def provider_name(self) -> str:
         return "PersonalOAuthProvider"
 
+    @property
+    def is_authenticated(self) -> bool:
+        """Check if cached token exists and is valid/refreshable without opening browser."""
+        if not self.token_path.exists():
+            return False
+        try:
+            creds = OAuth2Credentials.from_authorized_user_file(
+                str(self.token_path), self.scopes
+            )
+            if creds.valid:
+                return True
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self._save_token(creds)
+                return True
+            return False
+        except Exception:  # noqa: BLE001
+            return False
+
     def get_credentials(self) -> Credentials:
+
         """Acquire and return valid Google OAuth2 user credentials."""
         creds: OAuth2Credentials | None = None
 

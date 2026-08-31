@@ -41,7 +41,13 @@ class DomainWideDelegationProvider(DriveAuthProvider):
     def provider_name(self) -> str:
         return "DomainWideDelegationProvider"
 
+    @property
+    def is_authenticated(self) -> bool:
+        """Check if service account file exists and is readable."""
+        return self.service_account_path.exists()
+
     def get_credentials(self) -> Credentials:
+
         """Load and return valid Google Service Account credentials with delegation if configured."""
         if not self.service_account_path.exists():
             logger.error("Service Account key file not found at: %s", self.service_account_path)

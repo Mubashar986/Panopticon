@@ -31,11 +31,11 @@ class DriveAuthProvider(ABC):
 
     @abstractmethod
     def get_credentials(self) -> Credentials:
-        """Acquire, refresh if necessary, and return valid Google authentication credentials.
+        """Acquire, refresh if necessary, and return valid Google authentication credentials."""
 
-        Returns:
-            google.auth.credentials.Credentials: Valid authorized credentials instance.
+    @property
+    def is_authenticated(self) -> bool:
+        """Return True if valid credentials exist without launching interactive prompts."""
+        return False
 
-        Raises:
-            AuthError: If credential acquisition, refresh, or authorization fails.
-        """
+
