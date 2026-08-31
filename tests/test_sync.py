@@ -241,4 +241,7 @@ def test_sync_creates_versions_and_diffs_on_content_change(tmp_path: Path) -> No
     assert diffs[0].lines_removed == 1
     assert "-Line 2: Target Arch" in diffs[0].patch_text
     assert "+Line 2: Target Arch Modified" in diffs[0].patch_text
+    assert diffs[0].ai_summary is not None
+    assert "modified 'Spec Doc'" in diffs[0].ai_summary
+
 

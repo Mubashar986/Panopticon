@@ -51,6 +51,11 @@ class Settings(BaseSettings):
     AUTO_SYNC_ENABLED: bool = True
     AUTO_SYNC_INTERVAL_SECONDS: int = 30
 
+    # OpenRouter AI Semantic Change Summarizer
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = "openai/gpt-4o-mini"
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+
 
     @property
     def credentials_path(self) -> Path:

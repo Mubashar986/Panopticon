@@ -16,6 +16,7 @@ from app.indexer.models import (
     SyncResult,
 )
 from app.indexer.storage import CrawlStorage
+from app.indexer.summarizer import ChangeSummarizer, get_change_summarizer
 
 logger = get_logger("panopticon.indexer.sync")
 
@@ -29,6 +30,7 @@ class IncrementalSyncEngine:
         exporter: ContentExporter | None = None,
         storage: CrawlStorage | None = None,
         diff_engine: DiffEngine | None = None,
+        summarizer: ChangeSummarizer | None = None,
     ) -> None:
         """Initialize IncrementalSyncEngine with injected dependencies.
 
@@ -37,11 +39,13 @@ class IncrementalSyncEngine:
             exporter: Optional ContentExporter instance.
             storage: Optional CrawlStorage repository instance.
             diff_engine: Optional DiffEngine instance.
+            summarizer: Optional ChangeSummarizer instance.
         """
         self.crawler = crawler if crawler is not None else DriveCrawler()
         self.exporter = exporter if exporter is not None else ContentExporter()
         self.storage = storage if storage is not None else CrawlStorage()
         self.diff_engine = diff_engine if diff_engine is not None else DiffEngine()
+        self.summarizer = summarizer if summarizer is not None else get_change_summarizer()
 
     def run_sync(
         self,
@@ -143,12 +147,18 @@ class IncrementalSyncEngine:
                             )
                         )
                         if diff_res.has_changes:
+                            ai_summary = self.summarizer.summarize_diff(
+                                patch_text=diff_res.patch_text,
+                                file_name=file_to_save.name,
+                                editor=raw_file.last_modifying_user,
+                            )
                             self.storage.save_diff(
                                 DocumentDiff(
                                     file_id=file_id,
                                     from_version_id=prev_ver.id,
                                     to_version_id=new_ver.id,
                                     patch_text=diff_res.patch_text,
+                                    ai_summary=ai_summary,
                                     lines_added=diff_res.lines_added,
                                     lines_removed=diff_res.lines_removed,
                                 )

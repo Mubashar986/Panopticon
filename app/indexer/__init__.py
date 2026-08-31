@@ -30,8 +30,13 @@ from app.indexer.models import (
     SyncResult,
     sanitize_string,
 )
-from app.indexer.permissions import PermissionClassifier
 from app.indexer.storage import CrawlStorage, get_crawl_storage
+from app.indexer.summarizer import (
+    ChangeSummarizer,
+    HeuristicSummarizer,
+    OpenRouterSummarizer,
+    get_change_summarizer,
+)
 from app.indexer.sync import IncrementalSyncEngine
 
 __all__ = [
@@ -39,6 +44,7 @@ __all__ = [
     "DEFAULT_DRIVE_FIELDS",
     "GOOGLE_DOC_MIME_TYPE",
     "GOOGLE_SHEET_MIME_TYPE",
+    "ChangeSummarizer",
     "ContentExporter",
     "CrawlStats",
     "CrawlStorage",
@@ -53,12 +59,15 @@ __all__ = [
     "DrivePermission",
     "ExportResult",
     "ExportStatus",
+    "HeuristicSummarizer",
     "IncrementalSyncEngine",
     "LabelExtractor",
+    "OpenRouterSummarizer",
     "PermissionClassifier",
     "SharingStatus",
     "SyncResult",
     "build_label_query",
+    "get_change_summarizer",
     "get_crawl_storage",
     "get_diff_engine",
     "sanitize_string",
