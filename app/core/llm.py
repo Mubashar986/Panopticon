@@ -16,12 +16,18 @@ logger = get_logger("panopticon.core.llm")
 
 # Curated list of recommended models spanning speed, cost, and advanced reasoning
 RECOMMENDED_MODELS: list[str] = [
-    "deepseek/deepseek-chat",
-    "openai/gpt-4o-mini",
-    "google/gemini-2.0-flash-lite-preview-02-05:free",
-    "meta-llama/llama-3.3-70b-instruct",
-    "anthropic/claude-3.5-haiku",
+    "minimax/minimax-m3:free",
+    "nvidia/nemotron-3-ultra",
+    "nvidia/nemotron-3.5-lightning:free",
+    "nvidia/llama-3.1-nemotron-70b-instruct",
+    "anthropic/claude-3.7-sonnet",
     "anthropic/claude-3.5-sonnet",
+    "google/gemini-2.5-pro",
+    "google/gemini-2.0-flash",
+    "deepseek/deepseek-r1",
+    "deepseek/deepseek-chat",
+    "openai/gpt-4o",
+    "openai/o3-mini",
 ]
 
 
@@ -347,9 +353,9 @@ def get_runtime_llm_config() -> dict[str, Any]:
     """Retrieve current in-memory active LLM configuration."""
     settings = get_settings()
     return {
-        "model": _RUNTIME_CONFIG["model"] or settings.OPENROUTER_MODEL,
+        "model": _RUNTIME_CONFIG["model"] or settings.OPENROUTER_MODEL or "nvidia/nemotron-3-ultra",
         "api_key": _RUNTIME_CONFIG["api_key"] or settings.OPENROUTER_API_KEY,
-        "base_url": _RUNTIME_CONFIG["base_url"] or settings.OPENROUTER_BASE_URL,
+        "base_url": _RUNTIME_CONFIG["base_url"] or settings.OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1",
     }
 
 
@@ -372,10 +378,11 @@ def set_runtime_llm_config(
 
 def get_llm_client(settings: Settings | None = None) -> LLMClient:
     """Factory creating an LLMClient instance using active runtime credentials."""
+    s = settings if settings is not None else get_settings()
     cfg = get_runtime_llm_config()
-    key = cfg["api_key"] or ""
-    model = cfg["model"] or "deepseek/deepseek-chat"
-    base_url = cfg["base_url"] or "https://openrouter.ai/api/v1"
+    key = cfg.get("api_key") or s.OPENROUTER_API_KEY or ""
+    model = cfg.get("model") or s.OPENROUTER_MODEL or "nvidia/nemotron-3-ultra"
+    base_url = cfg.get("base_url") or s.OPENROUTER_BASE_URL or "https://openrouter.ai/api/v1"
 
     if not key:
         logger.debug("OPENROUTER_API_KEY not configured; returning MockLLMClient fallback.")
