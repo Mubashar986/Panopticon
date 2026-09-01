@@ -14,6 +14,7 @@ import { DenseDocumentTable } from './components/directory/DenseDocumentTable';
 import { PaginationBar } from './components/directory/PaginationBar';
 import { ViewToggle, ViewMode } from './components/directory/ViewToggle';
 import { VersionHistoryModal } from './components/diff/VersionHistoryModal';
+import { AgentChatDrawer } from './components/agent/AgentChatDrawer';
 
 export default function Dashboard() {
   const search = useSearch();
@@ -22,6 +23,7 @@ export default function Dashboard() {
 
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false);
+  const [agentChatOpen, setAgentChatOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [selectedDocForHistory, setSelectedDocForHistory] = useState<DocumentResponseItem | null>(null);
 
@@ -41,6 +43,14 @@ export default function Dashboard() {
           )}
         </div>
         <div className="flex items-center gap-[var(--space-4)]">
+          <button
+            type="button"
+            onClick={() => setAgentChatOpen(true)}
+            className="inline-flex items-center gap-2 px-[var(--space-3)] py-[var(--space-2)] rounded-[var(--radius-md)] bg-[rgba(139,92,246,0.15)] text-[var(--color-primary-hover)] border border-[rgba(139,92,246,0.35)] hover:bg-[rgba(139,92,246,0.25)] hover:border-[var(--color-primary)] active:scale-95 focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] text-[12px] font-semibold transition-all cursor-pointer shadow-[var(--elevation-glow-primary)]"
+          >
+            <span>✨</span>
+            <span>Ask Panopticon</span>
+          </button>
           <SyncControls
             status={sync.status}
             onOpenDrawer={() => setSyncDrawerOpen(true)}
@@ -124,6 +134,24 @@ export default function Dashboard() {
         fileId={selectedDocForHistory?.id || null}
         fileName={selectedDocForHistory?.name || ''}
       />
+
+      <AgentChatDrawer
+        isOpen={agentChatOpen}
+        onClose={() => setAgentChatOpen(false)}
+      />
+
+      {/* Floating Action Launcher Pill */}
+      {!agentChatOpen && (
+        <button
+          type="button"
+          onClick={() => setAgentChatOpen(true)}
+          aria-label="Open Panopticon Agent Chat"
+          className="fixed bottom-6 right-6 z-40 inline-flex items-center gap-2 px-4 py-3 rounded-[var(--radius-full)] bg-[var(--color-primary)] text-white font-medium text-sm shadow-[var(--elevation-card-hover)] hover:bg-[var(--color-primary-hover)] active:scale-95 focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] transition-all cursor-pointer border border-white/20"
+        >
+          <span className="text-base">✨</span>
+          <span>Ask Panopticon</span>
+        </button>
+      )}
     </div>
   );
 }
