@@ -62,3 +62,5 @@ def test_api_agent_query_endpoint(client: TestClient):
         assert len(data["trace"]) == 2
         assert data["model"] == "minimax/minimax-m3:free"
         assert data["latency_ms"] == 45.2
+        assert "citations" in data
+        assert isinstance(data["citations"], list)

@@ -30,6 +30,20 @@ class AgentQueryRequest(BaseModel):
     )
 
 
+class VerifiedCitationItem(BaseModel):
+    """Wire representation of an authoritatively verified citation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    file_id: str = Field(..., description="Google Drive unique file ID")
+    document_name: str = Field(..., description="Canonical document title")
+    web_view_link: str = Field(..., description="Authoritative Google Drive URL")
+    mime_type: str = Field(default="application/vnd.google-apps.document", description="Document MIME type")
+    matched_snippet: str | None = Field(default=None, description="Verified quote or excerpt from source text")
+    confidence_score: float = Field(default=1.0, description="Groundedness confidence score (0.0 to 1.0)")
+    verification_status: str = Field(default="verified", description="Grounding status ('verified' | 'unverified' | 'hallucination_flagged')")
+
+
 class AgentQueryResponse(BaseModel):
     """Structured response from the Agentic Reasoning Engine."""
 
@@ -40,6 +54,9 @@ class AgentQueryResponse(BaseModel):
     tools_used: list[str] = Field(default_factory=list, description="List of unique tools executed")
     trace: list[AgentStepTraceItem] = Field(
         default_factory=list, description="Step-by-step reasoning and tool execution trace"
+    )
+    citations: list[VerifiedCitationItem] = Field(
+        default_factory=list, description="Authoritatively verified document citations and Drive pointers"
     )
     model: str = Field(..., description="Model ID that generated the answer")
     latency_ms: float = Field(..., description="Execution duration in milliseconds")

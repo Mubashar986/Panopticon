@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.agent.citations import CitationVerifier
 from app.agent.engine import AgenticReasoningEngine
 from app.agent.tools import AgentToolContext
 from app.api.deps import CrawlStorageDep
@@ -11,6 +12,7 @@ from app.api.schemas.agent import (
     AgentQueryRequest,
     AgentQueryResponse,
     AgentStepTraceItem,
+    VerifiedCitationItem,
 )
 from app.core.llm import OpenRouterClient, get_llm_client, get_runtime_llm_config
 from app.core.logging import get_logger
@@ -58,6 +60,27 @@ def query_agent(
         user_instructions=payload.user_instructions,
     )
 
+    # Execute Citation Verification & Hallucination Guardrail
+    verifier = CitationVerifier()
+    sanitized_answer, verified_citations = verifier.verify_and_sanitize(
+        text=result.answer,
+        trace=result.trace,
+        storage=storage,
+    )
+
+    citation_items = [
+        VerifiedCitationItem(
+            file_id=c.file_id,
+            document_name=c.document_name,
+            web_view_link=c.web_view_link,
+            mime_type=c.mime_type,
+            matched_snippet=c.matched_snippet,
+            confidence_score=c.confidence_score,
+            verification_status=c.verification_status,
+        )
+        for c in verified_citations
+    ]
+
     trace_items = [
         AgentStepTraceItem(
             step=t.step,
@@ -69,10 +92,11 @@ def query_agent(
     ]
 
     return AgentQueryResponse(
-        answer=result.answer,
+        answer=sanitized_answer,
         steps_taken=result.steps_taken,
         tools_used=result.tools_used,
         trace=trace_items,
+        citations=citation_items,
         model=result.model,
         latency_ms=result.latency_ms,
     )
