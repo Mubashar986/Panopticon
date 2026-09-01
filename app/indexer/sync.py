@@ -4,8 +4,10 @@ import hashlib
 from datetime import datetime, timezone
 
 from app.core.logging import get_logger
+from app.indexer.chunker import TextChunker
 from app.indexer.crawler import DEFAULT_DOCS_SHEETS_QUERY, DriveCrawler
 from app.indexer.diff import DiffEngine
+from app.indexer.embeddings import EmbeddingProvider, get_embedding_provider
 from app.indexer.exporter import ContentExporter
 from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
@@ -31,6 +33,8 @@ class IncrementalSyncEngine:
         storage: CrawlStorage | None = None,
         diff_engine: DiffEngine | None = None,
         summarizer: ChangeSummarizer | None = None,
+        chunker: TextChunker | None = None,
+        embedding_provider: EmbeddingProvider | None = None,
     ) -> None:
         """Initialize IncrementalSyncEngine with injected dependencies.
 
@@ -40,12 +44,16 @@ class IncrementalSyncEngine:
             storage: Optional CrawlStorage repository instance.
             diff_engine: Optional DiffEngine instance.
             summarizer: Optional ChangeSummarizer instance.
+            chunker: Optional TextChunker instance.
+            embedding_provider: Optional EmbeddingProvider instance.
         """
         self.crawler = crawler if crawler is not None else DriveCrawler()
         self.exporter = exporter if exporter is not None else ContentExporter()
         self.storage = storage if storage is not None else CrawlStorage()
         self.diff_engine = diff_engine if diff_engine is not None else DiffEngine()
         self.summarizer = summarizer if summarizer is not None else get_change_summarizer()
+        self.chunker = chunker if chunker is not None else TextChunker()
+        self.embedding_provider = embedding_provider if embedding_provider is not None else get_embedding_provider()
 
     def run_sync(
         self,
@@ -119,7 +127,7 @@ class IncrementalSyncEngine:
                     prev_ver = self.storage.get_latest_version(file_id)
 
                     if prev_ver is None:
-                        self.storage.save_version(
+                        saved_ver = self.storage.save_version(
                             DocumentVersion(
                                 file_id=file_id,
                                 version_number=1,
@@ -128,6 +136,9 @@ class IncrementalSyncEngine:
                                 modified_time=raw_file.modified_time,
                                 editor=raw_file.last_modifying_user,
                             )
+                        )
+                        self._generate_and_save_chunks(
+                            new_text, file_id, file_to_save.name, saved_ver.id
                         )
                     elif prev_ver.content_hash != new_hash:
                         diff_res = self.diff_engine.compute_diff(
@@ -145,6 +156,9 @@ class IncrementalSyncEngine:
                                 modified_time=raw_file.modified_time,
                                 editor=raw_file.last_modifying_user,
                             )
+                        )
+                        self._generate_and_save_chunks(
+                            new_text, file_id, file_to_save.name, new_ver.id
                         )
                         if diff_res.has_changes:
                             ai_summary = self.summarizer.summarize_diff(
@@ -229,3 +243,31 @@ class IncrementalSyncEngine:
             total_stored,
         )
         return result
+
+    def _generate_and_save_chunks(
+        self,
+        content_text: str,
+        file_id: str,
+        file_name: str,
+        version_id: str | None,
+    ) -> None:
+        """Chunk document text, compute vector embeddings, and persist chunks to storage."""
+        try:
+            chunks = self.chunker.chunk_document(
+                content_text=content_text,
+                file_id=file_id,
+                file_name=file_name,
+                version_id=version_id,
+            )
+            if chunks:
+                texts = [c.content_text for c in chunks]
+                embeddings = self.embedding_provider.embed_texts(texts)
+                enriched = [
+                    c.model_copy(update={"embedding": emb})
+                    for c, emb in zip(chunks, embeddings)
+                ]
+                self.storage.save_chunks(enriched)
+                logger.debug("Saved %d semantic chunks for file %s", len(enriched), file_id)
+        except Exception as exc:
+            logger.warning("Failed to chunk and embed file %s: %s", file_id, exc)
+

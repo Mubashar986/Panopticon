@@ -1,11 +1,19 @@
 """Panopticon Indexer Package."""
 
+from app.indexer.chunker import TextChunker
 from app.indexer.crawler import (
     DEFAULT_DOCS_SHEETS_QUERY,
     DEFAULT_DRIVE_FIELDS,
     DriveCrawler,
 )
 from app.indexer.diff import DiffEngine, get_diff_engine
+from app.indexer.embeddings import (
+    DeterministicHashEmbeddingProvider,
+    EmbeddingProvider,
+    OpenRouterEmbeddingProvider,
+    cosine_similarity,
+    get_embedding_provider,
+)
 from app.indexer.exporter import (
     ContentExporter,
     ExportResult,
@@ -22,6 +30,7 @@ from app.indexer.models import (
     GOOGLE_SHEET_MIME_TYPE,
     CrawlStats,
     DiffResult,
+    DocumentChunk,
     DocumentDiff,
     DocumentVersion,
     DriveFileMetadata,
@@ -50,8 +59,11 @@ __all__ = [
     "CrawlStorage",
     "DiffEngine",
     "DiffResult",
+    "DocumentChunk",
     "DocumentDiff",
     "DocumentVersion",
+    "DeterministicHashEmbeddingProvider",
+    "EmbeddingProvider",
     "DriveCrawler",
     "DriveFileMetadata",
     "DriveLabel",
@@ -62,13 +74,17 @@ __all__ = [
     "HeuristicSummarizer",
     "IncrementalSyncEngine",
     "LabelExtractor",
+    "OpenRouterEmbeddingProvider",
     "OpenRouterSummarizer",
     "PermissionClassifier",
     "SharingStatus",
     "SyncResult",
+    "TextChunker",
     "build_label_query",
+    "cosine_similarity",
     "get_change_summarizer",
     "get_crawl_storage",
     "get_diff_engine",
+    "get_embedding_provider",
     "sanitize_string",
 ]

@@ -410,4 +410,50 @@ class DiffResult(BaseModel):
     )
 
 
+class DocumentChunk(BaseModel):
+    """Domain entity representing a contextual semantic passage of an exported document."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(..., description="Unique chunk identifier (e.g. chk_<hash/uuid>)")
+    file_id: str = Field(..., description="Google Drive file ID")
+    version_id: str | None = Field(
+        default=None, description="DocumentVersion ID this chunk was extracted from"
+    )
+    chunk_index: int = Field(
+        ..., description="Zero-based sequential index of the chunk within the document"
+    )
+    section_heading: str | None = Field(
+        default=None, description="Extracted section heading or title context"
+    )
+    content_text: str = Field(
+        ..., description="Text content of the chunk with metadata context anchor"
+    )
+    char_start: int = Field(
+        default=0, description="Character offset start in original document text"
+    )
+    char_end: int = Field(
+        default=0, description="Character offset end in original document text"
+    )
+    word_count: int = Field(
+        default=0, description="Number of whitespace-delimited words in content"
+    )
+    embedding: list[float] | None = Field(
+        default=None, description="Dense vector embedding representation"
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Chunk generation timestamp (UTC)",
+    )
+
+    @field_validator("id", "file_id", "version_id", "section_heading", mode="before")
+    @classmethod
+    def clean_chunk_strings(cls, v: Any) -> Any:
+        """Strip control characters from identifier and heading strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+
+
 

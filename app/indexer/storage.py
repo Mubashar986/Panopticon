@@ -10,7 +10,9 @@ from typing import Any
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
+from app.indexer.embeddings import cosine_similarity
 from app.indexer.models import (
+    DocumentChunk,
     DocumentDiff,
     DocumentVersion,
     DriveFileMetadata,
@@ -114,6 +116,23 @@ class CrawlStorage:
                     FOREIGN KEY (to_version_id) REFERENCES document_versions(id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS document_chunks (
+                    id TEXT PRIMARY KEY,
+                    file_id TEXT NOT NULL,
+                    version_id TEXT,
+                    chunk_index INTEGER NOT NULL,
+                    section_heading TEXT,
+                    content_text TEXT NOT NULL,
+                    char_start INTEGER NOT NULL DEFAULT 0,
+                    char_end INTEGER NOT NULL DEFAULT 0,
+                    word_count INTEGER NOT NULL DEFAULT 0,
+                    embedding_json TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (file_id) REFERENCES file_records(id) ON DELETE CASCADE,
+                    FOREIGN KEY (version_id) REFERENCES document_versions(id) ON DELETE CASCADE,
+                    UNIQUE(file_id, chunk_index)
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_file_modified_time ON file_records(modified_time);
                 CREATE INDEX IF NOT EXISTS idx_file_sharing_status ON file_records(sharing_status);
                 CREATE INDEX IF NOT EXISTS idx_file_trashed ON file_records(trashed);
@@ -124,6 +143,8 @@ class CrawlStorage:
                 CREATE INDEX IF NOT EXISTS idx_versions_content_hash ON document_versions(content_hash);
                 CREATE INDEX IF NOT EXISTS idx_diffs_file_id ON document_diffs(file_id);
                 CREATE INDEX IF NOT EXISTS idx_diffs_versions ON document_diffs(from_version_id, to_version_id);
+                CREATE INDEX IF NOT EXISTS idx_chunks_file_idx ON document_chunks(file_id, chunk_index);
+                CREATE INDEX IF NOT EXISTS idx_chunks_version ON document_chunks(version_id);
                 """
             )
         logger.debug("Initialized SQLite storage schema at %s", self.db_path)
@@ -804,6 +825,156 @@ class CrawlStorage:
                 cursor = conn.execute("SELECT COUNT(*) as count FROM document_diffs")
             row = cursor.fetchone()
             return int(row["count"]) if row else 0
+
+    # --------------------------------------------------------------------------
+    # Semantic Document Chunk Operations
+    # --------------------------------------------------------------------------
+
+    def save_chunks(self, chunks: list[DocumentChunk]) -> int:
+        """Insert or replace semantic chunks for a document.
+
+        Args:
+            chunks: List of DocumentChunk models to persist.
+
+        Returns:
+            int: Number of chunks successfully saved.
+        """
+        if not chunks:
+            return 0
+
+        with self.get_connection() as conn:
+            with conn:
+                for c in chunks:
+                    embed_str = json.dumps(c.embedding) if c.embedding is not None else None
+                    conn.execute(
+                        """
+                        INSERT INTO document_chunks (
+                            id, file_id, version_id, chunk_index, section_heading,
+                            content_text, char_start, char_end, word_count,
+                            embedding_json, created_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON CONFLICT(file_id, chunk_index) DO UPDATE SET
+                            id=excluded.id,
+                            version_id=excluded.version_id,
+                            section_heading=excluded.section_heading,
+                            content_text=excluded.content_text,
+                            char_start=excluded.char_start,
+                            char_end=excluded.char_end,
+                            word_count=excluded.word_count,
+                            embedding_json=excluded.embedding_json,
+                            created_at=excluded.created_at
+                        """,
+                        (
+                            c.id,
+                            c.file_id,
+                            c.version_id,
+                            c.chunk_index,
+                            c.section_heading,
+                            c.content_text,
+                            c.char_start,
+                            c.char_end,
+                            c.word_count,
+                            embed_str,
+                            c.created_at.isoformat(),
+                        ),
+                    )
+        return len(chunks)
+
+    def get_chunks_for_file(self, file_id: str) -> list[DocumentChunk]:
+        """Retrieve all semantic chunks for a document ordered by sequential index."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM document_chunks WHERE file_id = ? ORDER BY chunk_index ASC",
+                (file_id,),
+            )
+            return [self._row_to_chunk_model(row) for row in cursor.fetchall()]
+
+    def delete_chunks_for_file(self, file_id: str) -> int:
+        """Delete all semantic chunks associated with a file ID."""
+        with self.get_connection() as conn:
+            with conn:
+                cursor = conn.execute(
+                    "DELETE FROM document_chunks WHERE file_id = ?",
+                    (file_id,),
+                )
+                return cursor.rowcount
+
+    def search_similar_chunks(
+        self,
+        query_vector: list[float],
+        limit: int = 5,
+        file_id_filter: str | None = None,
+        min_similarity: float = 0.05,
+    ) -> list[tuple[DocumentChunk, float]]:
+        """Search document chunks using vector cosine similarity.
+
+        Args:
+            query_vector: Normalized embedding vector of the search query.
+            limit: Maximum matching chunks to return.
+            file_id_filter: Optional Google Drive file ID to restrict search scope.
+            min_similarity: Minimum cosine similarity score threshold.
+
+        Returns:
+            list[tuple[DocumentChunk, float]]: Top matching chunks and their similarity scores.
+        """
+        if not query_vector:
+            return []
+
+        with self.get_connection() as conn:
+            if file_id_filter is not None:
+                cursor = conn.execute(
+                    "SELECT * FROM document_chunks WHERE file_id = ? AND embedding_json IS NOT NULL",
+                    (file_id_filter,),
+                )
+            else:
+                cursor = conn.execute(
+                    "SELECT * FROM document_chunks WHERE embedding_json IS NOT NULL"
+                )
+            rows = cursor.fetchall()
+
+        scored: list[tuple[DocumentChunk, float]] = []
+        for row in rows:
+            chunk = self._row_to_chunk_model(row)
+            if chunk.embedding:
+                sim = cosine_similarity(query_vector, chunk.embedding)
+                if sim >= min_similarity:
+                    scored.append((chunk, round(sim, 4)))
+
+        # Sort by similarity descending
+        scored.sort(key=lambda x: x[1], reverse=True)
+        return scored[:limit]
+
+    def count_chunks(self, file_id: str | None = None) -> int:
+        """Return total count of chunks stored (optionally filtered by file_id)."""
+        with self.get_connection() as conn:
+            if file_id is not None:
+                cursor = conn.execute(
+                    "SELECT COUNT(*) as count FROM document_chunks WHERE file_id = ?",
+                    (file_id,),
+                )
+            else:
+                cursor = conn.execute("SELECT COUNT(*) as count FROM document_chunks")
+            row = cursor.fetchone()
+            return int(row["count"]) if row else 0
+
+    @staticmethod
+    def _row_to_chunk_model(row: sqlite3.Row) -> DocumentChunk:
+        """Convert a database row into a DocumentChunk domain entity."""
+        embed_raw = row["embedding_json"]
+        embedding = json.loads(embed_raw) if embed_raw else None
+        return DocumentChunk(
+            id=row["id"],
+            file_id=row["file_id"],
+            version_id=row["version_id"],
+            chunk_index=row["chunk_index"],
+            section_heading=row["section_heading"],
+            content_text=row["content_text"],
+            char_start=row["char_start"],
+            char_end=row["char_end"],
+            word_count=row["word_count"],
+            embedding=embedding,
+            created_at=datetime.fromisoformat(row["created_at"]),
+        )
 
 
 def get_crawl_storage(db_path: str | Path | None = None) -> CrawlStorage:
