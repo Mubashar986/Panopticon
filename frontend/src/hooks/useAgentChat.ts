@@ -1,5 +1,11 @@
-import { useState, useRef, useCallback } from 'react';
-import { ChatMessage, AgentStepTraceItem, VerifiedCitationItem } from '../types/agent';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import {
+  ChatMessage,
+  AgentStepTraceItem,
+  VerifiedCitationItem,
+  AgentThread,
+  AgentThreadDetail,
+} from '../types/agent';
 import { getApiUrl } from '../config/api';
 
 export interface UseAgentChatReturn {
@@ -9,6 +15,16 @@ export interface UseAgentChatReturn {
   currentStep: number;
   selectedModel: string | null;
   setSelectedModel: (model: string | null) => void;
+  // Multi-turn thread state & controls (RFC-0002)
+  threads: AgentThread[];
+  activeThreadId: string | null;
+  isHistoryOpen: boolean;
+  setIsHistoryOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
+  loadThreads: () => Promise<void>;
+  selectThread: (threadId: string) => Promise<void>;
+  createNewThread: () => void;
+  renameThread: (threadId: string, newTitle: string) => Promise<void>;
+  deleteThread: (threadId: string) => Promise<void>;
   sendMessage: (query: string) => Promise<void>;
   cancelStreaming: () => void;
   clearChat: () => void;
@@ -21,7 +37,29 @@ export function useAgentChat(): UseAgentChatReturn {
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
+  // Multi-turn thread management
+  const [threads, setThreads] = useState<AgentThread[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const loadThreads = useCallback(async () => {
+    try {
+      const response = await fetch(getApiUrl('/api/agent/threads'));
+      if (response.ok) {
+        const data: AgentThread[] = await response.json();
+        setThreads(data);
+      }
+    } catch (err) {
+      console.error('Failed to load conversation threads:', err);
+    }
+  }, []);
+
+  // Hydrate threads on hook mount
+  useEffect(() => {
+    loadThreads();
+  }, [loadThreads]);
 
   const cancelStreaming = useCallback(() => {
     if (abortControllerRef.current) {
@@ -42,17 +80,93 @@ export function useAgentChat(): UseAgentChatReturn {
     });
   }, []);
 
-  const clearChat = useCallback(() => {
+  const createNewThread = useCallback(() => {
     cancelStreaming();
+    setActiveThreadId(null);
     setMessages([]);
     setCurrentStep(0);
     setActiveTool(null);
   }, [cancelStreaming]);
 
+  const clearChat = useCallback(() => {
+    if (activeThreadId) {
+      // If we have an active thread, create a fresh one
+      createNewThread();
+    } else {
+      cancelStreaming();
+      setMessages([]);
+      setCurrentStep(0);
+      setActiveTool(null);
+    }
+  }, [activeThreadId, cancelStreaming, createNewThread]);
+
+  const selectThread = useCallback(
+    async (threadId: string) => {
+      cancelStreaming();
+      setActiveThreadId(threadId);
+      try {
+        const response = await fetch(getApiUrl(`/api/agent/threads/${threadId}`));
+        if (!response.ok) throw new Error('Failed to load thread details');
+        const detail: AgentThreadDetail = await response.json();
+        const loadedMessages: ChatMessage[] = detail.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          timestamp: new Date(m.created_at),
+          trace: m.trace,
+          citations: m.citations,
+          model: m.model || undefined,
+          latencyMs: m.latency_ms || undefined,
+        }));
+        setMessages(loadedMessages);
+      } catch (err) {
+        console.error('Error loading thread:', err);
+      }
+    },
+    [cancelStreaming]
+  );
+
+  const deleteThread = useCallback(
+    async (threadId: string) => {
+      try {
+        await fetch(getApiUrl(`/api/agent/threads/${threadId}`), { method: 'DELETE' });
+        setThreads((prev) => prev.filter((t) => t.id !== threadId));
+        if (activeThreadId === threadId) {
+          createNewThread();
+        }
+      } catch (err) {
+        console.error('Error deleting thread:', err);
+      }
+    },
+    [activeThreadId, createNewThread]
+  );
+
+  const renameThread = useCallback(async (threadId: string, newTitle: string) => {
+    try {
+      const response = await fetch(getApiUrl(`/api/agent/threads/${threadId}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      if (response.ok) {
+        const updated: AgentThread = await response.json();
+        setThreads((prev) => prev.map((t) => (t.id === threadId ? updated : t)));
+      }
+    } catch (err) {
+      console.error('Error renaming thread:', err);
+    }
+  }, []);
+
   const sendMessage = useCallback(
     async (query: string) => {
       const trimmed = query.trim();
       if (!trimmed || isStreaming) return;
+
+      // Assign or reuse thread ID
+      const currentThreadId = activeThreadId || `th_${Math.random().toString(36).substring(2, 10)}`;
+      if (!activeThreadId) {
+        setActiveThreadId(currentThreadId);
+      }
 
       const userMsgId = `user_${Date.now()}`;
       const assistantMsgId = `assistant_${Date.now()}`;
@@ -88,6 +202,7 @@ export function useAgentChat(): UseAgentChatReturn {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             query: trimmed,
+            thread_id: currentThreadId,
             model: selectedModel || undefined,
           }),
           signal: controller.signal,
@@ -198,6 +313,8 @@ export function useAgentChat(): UseAgentChatReturn {
                           : m
                       )
                     );
+                    // Refresh threads to capture updated title and timestamp
+                    loadThreads();
                   } else if (eventType === 'error') {
                     setMessages((prev) =>
                       prev.map((m) =>
@@ -242,7 +359,7 @@ export function useAgentChat(): UseAgentChatReturn {
         abortControllerRef.current = null;
       }
     },
-    [isStreaming, selectedModel]
+    [activeThreadId, isStreaming, loadThreads, selectedModel]
   );
 
   return {
@@ -252,6 +369,15 @@ export function useAgentChat(): UseAgentChatReturn {
     currentStep,
     selectedModel,
     setSelectedModel,
+    threads,
+    activeThreadId,
+    isHistoryOpen,
+    setIsHistoryOpen,
+    loadThreads,
+    selectThread,
+    createNewThread,
+    renameThread,
+    deleteThread,
     sendMessage,
     cancelStreaming,
     clearChat,

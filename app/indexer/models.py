@@ -455,5 +455,95 @@ class DocumentChunk(BaseModel):
         return v
 
 
+class AgentThread(BaseModel):
+    """Domain model representing a multi-turn conversation thread."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"th_{uuid.uuid4().hex[:12]}",
+        description="Unique thread identifier",
+    )
+    title: str = Field(
+        default="New Conversation",
+        description="Human-readable title of the conversation thread",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Primary LLM model used for this thread",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Thread creation timestamp (UTC)",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Thread last activity timestamp (UTC)",
+    )
+    message_count: int = Field(
+        default=0,
+        description="Total messages in this thread",
+    )
+
+    @field_validator("id", "title", "model", mode="before")
+    @classmethod
+    def clean_thread_strings(cls, v: Any) -> Any:
+        """Strip control characters from thread strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+
+class AgentMessage(BaseModel):
+    """Domain model representing a single conversational turn in a thread."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"msg_{uuid.uuid4().hex[:12]}",
+        description="Unique message turn identifier",
+    )
+    thread_id: str = Field(
+        ...,
+        description="Parent conversation thread identifier",
+    )
+    role: Literal["user", "assistant", "system"] = Field(
+        ...,
+        description="Role of the message sender",
+    )
+    content: str = Field(
+        ...,
+        description="Natural language content of the message",
+    )
+    trace_json: str | None = Field(
+        default=None,
+        description="JSON-encoded execution trace of tool calls",
+    )
+    citations_json: str | None = Field(
+        default=None,
+        description="JSON-encoded list of verified document citations",
+    )
+    model: str | None = Field(
+        default=None,
+        description="Model ID that generated the message",
+    )
+    latency_ms: float | None = Field(
+        default=None,
+        description="Execution duration in milliseconds",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Message creation timestamp (UTC)",
+    )
+
+    @field_validator("id", "thread_id", "content", mode="before")
+    @classmethod
+    def clean_message_strings(cls, v: Any) -> Any:
+        """Strip control characters from message strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+
 
 
