@@ -12,7 +12,7 @@ interface ChatInputBarProps {
 const AVAILABLE_MODELS = [
   { id: '', label: 'Default (Fast Reasoning)' },
   { id: 'minimax/minimax-m3:free', label: 'MiniMax M3 (Free)' },
-  { id: 'nvidia/nemotron-3-ultra', label: 'Nvidia Nemotron 3 Ultra' },
+  { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nvidia Nemotron 3 Ultra free' },
   { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
   { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
 ];

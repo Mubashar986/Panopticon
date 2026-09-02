@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from app.core.llm import (
+    LLMAPIError,
     LLMMessage,
     LLMResponse,
     MockLLMClient,
@@ -225,3 +226,38 @@ def test_runtime_llm_config_mutation():
     updated = set_runtime_llm_config(model="anthropic/claude-3.5-sonnet")
     assert updated["model"] == "anthropic/claude-3.5-sonnet"
     assert get_runtime_llm_config()["model"] == "anthropic/claude-3.5-sonnet"
+
+
+def test_openrouter_client_error_payload():
+    """Verify OpenRouterClient raises LLMAPIError when provider returns error object under HTTP 200."""
+    client = OpenRouterClient(api_key="sk-test-key", model="nvidia/nemotron-3-ultra")
+
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "error": {
+            "message": "Provider rate limit exceeded. Please retry later.",
+            "code": 429,
+        }
+    }
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        with pytest.raises(LLMAPIError) as exc_info:
+            client.complete(messages=[LLMMessage(role="user", content="Hi")])
+        assert "LLM Provider Error [429]" in str(exc_info.value)
+        assert "Provider rate limit exceeded" in str(exc_info.value)
+
+
+def test_openrouter_client_missing_choices():
+    """Verify OpenRouterClient raises LLMAPIError when response lacks choices array."""
+    client = OpenRouterClient(api_key="sk-test-key", model="nvidia/nemotron-3-ultra")
+
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {"id": "gen-12345", "choices": []}
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        with pytest.raises(LLMAPIError) as exc_info:
+            client.complete(messages=[LLMMessage(role="user", content="Hi")])
+        assert "no choices" in str(exc_info.value)
+

@@ -16,7 +16,7 @@ logger = get_logger("panopticon.core.llm")
 
 # Curated list of recommended models spanning speed, cost, and advanced reasoning
 RECOMMENDED_MODELS: list[str] = [
-    "minimax/minimax-m3:free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
     "nvidia/nemotron-3-ultra",
     "nvidia/nemotron-3.5-lightning:free",
     "nvidia/llama-3.1-nemotron-70b-instruct",
@@ -46,6 +46,10 @@ def mask_api_key(key: str | None) -> str | None:
     prefix = k[:9]
     suffix = k[-6:]
     return f"{prefix}***{suffix}"
+
+
+class LLMAPIError(RuntimeError):
+    """Exception raised when an LLM provider returns an API error or malformed payload."""
 
 
 class ToolCall(BaseModel):
@@ -234,7 +238,33 @@ class OpenRouterClient:
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
 
-        choice = data["choices"][0]
+        if not isinstance(data, dict):
+            raise LLMAPIError(
+                f"Malformed response from LLM gateway: expected JSON object, got {type(data).__name__}"
+            )
+
+        # Catch OpenRouter / upstream API error payloads returned under HTTP 200
+        if "error" in data and data["error"]:
+            err_info = data["error"]
+            if isinstance(err_info, dict):
+                err_msg = err_info.get("message") or str(err_info)
+                err_code = err_info.get("code")
+                code_str = f" [{err_code}]" if err_code else ""
+                raise LLMAPIError(f"LLM Provider Error{code_str}: {err_msg}")
+            raise LLMAPIError(f"LLM Provider Error: {err_info}")
+
+        choices = data.get("choices")
+        if not choices or not isinstance(choices, list):
+            raise LLMAPIError(
+                f"LLM provider returned no choices. Gateway response: {str(data)[:300]}"
+            )
+
+        choice = choices[0]
+        if not isinstance(choice, dict):
+            raise LLMAPIError(
+                f"Malformed choice in LLM response: expected dict, got {type(choice).__name__}"
+            )
+
         message_data = choice.get("message", {})
         finish_reason = choice.get("finish_reason", "stop")
 
@@ -288,6 +318,9 @@ class OpenRouterClient:
             code = exc.response.status_code
             msg = f"HTTP {code} error: {exc.response.text[:200]}"
             return False, round(latency, 2), msg
+        except LLMAPIError as exc:
+            latency = (time.perf_counter() - start_time) * 1000.0
+            return False, round(latency, 2), str(exc)
         except Exception as exc:
             latency = (time.perf_counter() - start_time) * 1000.0
             return False, round(latency, 2), f"Network/Connection error: {exc}"

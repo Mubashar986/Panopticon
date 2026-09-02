@@ -16,7 +16,6 @@ logger = get_logger("panopticon.agent.tools")
 
 MAX_TOOL_OUTPUT_CHARS = 2500
 
-
 @dataclass
 class AgentToolContext:
     """Dependency injection container for tool execution."""
@@ -156,7 +155,11 @@ def _handle_search_index(args: dict[str, Any], ctx: AgentToolContext) -> str:
                     "owners": h.owners,
                     "project_tags": h.project_tags,
                     "snippet": h.content_snippet,
-                    "modified_time": h.modified_time.isoformat() if h.modified_time else None,
+                    "modified_time": (
+                        h.modified_time.isoformat()
+                        if hasattr(h.modified_time, "isoformat")
+                        else (str(h.modified_time) if h.modified_time else None)
+                    ),
                 }
                 for h in res.hits
             ]
