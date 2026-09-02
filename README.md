@@ -119,88 +119,45 @@ Traditional Google Drive search struggles with strict substring matching, lack o
 ## 🏛️ System Architecture
 
 ```mermaid
-graph TD
-    subgraph Client ["Frontend Layer — React 19 + TypeScript + Vite (Port 5173)"]
-        UI_Search["Search Hub\n(Typo-Tolerant Cards)"]
-        UI_Dir["Document Directory\n(Dense Table / Grid)"]
-        UI_Diff["Diff Viewer Modal\n(Syntax Highlighted Patches)"]
-        UI_Agent["Ask Panopticon\n(Streaming Agentic Chat Drawer)"]
-        UI_Threads["Thread History Sidebar\n(Multi-Turn Sessions)"]
+flowchart TD
+    subgraph Client ["Frontend Layer (Port 5173)"]
+        UI["React 19 Dashboard<br>(Search, Directory, Diff Modal, Agent Chat)"]
     end
 
-    subgraph API ["Backend API Layer — FastAPI (Port 8000)"]
-        FastAPIApp["FastAPI Core Application"]
-        EventBus["SyncEventBus\n(In-Memory Pub/Sub)"]
-        Supervisor["EngineSupervisor\n(Auto-binary spawn/health/kill)"]
-        SyncManager["SyncManager\n(Background Delta Worker)"]
+    subgraph API ["FastAPI Backend Layer (Port 8000)"]
+        Server["FastAPI Server & Endpoints"]
+        EventBus["SyncEventBus (SSE Live Stream)"]
+        Supervisor["EngineSupervisor (Meilisearch Daemon)"]
     end
 
-    subgraph AgentSystem ["Agentic RAG Subsystem"]
-        AgentEngine["AgentEngine\n(ReAct Reasoning Loop)"]
-        LLMClient["LLMClient\n(OpenRouter / OpenAI-Compatible)"]
-        CitationVerifier["CitationVerifier\n(Zero-Hallucination Guard)"]
-        
-        subgraph AgentTools ["Agent Domain Tools"]
-            T_Search["search_index"]
-            T_Diff["get_document_diff"]
-            T_Meta["get_file_metadata"]
-            T_Vector["semantic_chunk_search"]
-        end
+    subgraph Core ["Core Engine & RAG Layer"]
+        Agent["AgentEngine (ReAct Loop + 4 Tools + Citations)"]
+        Ingest["Sync & Diff Engine (Crawler, Patches, AI Summaries)"]
     end
 
-    subgraph Ingestion ["Ingestion, Diffing & Chunking Pipeline"]
-        Crawler["GoogleDriveCrawler\n(My Drive + Shared Drives)"]
-        Exporter["ContentExporter\n(10MB Cap Safe)"]
-        DiffEngine["DiffEngine\n(Unified Git-Style Patches)"]
-        Summarizer["ChangeSummarizer\n(AI Summaries + Guardrails)"]
-        Chunker["TextChunker & LocalEmbedder\n(FastEmbed / Vectors)"]
+    subgraph Storage ["Persistence & External Services"]
+        Meili[("Meilisearch Engine (Port 7700)<br>Fuzzy Search & Ranking")]
+        SQLite[("SQLite WAL Database<br>Files, Versions, Diffs, Threads")]
+        Drive["Google Drive API v3"]
+        LLM["OpenRouter / LLM Providers"]
     end
 
-    subgraph Persistence ["Persistence & Search Indices"]
-        SQLite_DB[("SQLite Database (WAL Mode)\n• file_records\n• document_versions\n• document_diffs\n• agent_threads\n• agent_messages")]
-        Meili_Index[("Meilisearch Engine (Port 7700)\n• Typo-Tolerant Index\n• Custom Ranking Rules")]
-    end
+    UI -->|"REST & SSE Queries"| Server
+    Server --> EventBus
+    Server --> Supervisor
+    Server --> Agent
+    Server --> Ingest
 
-    subgraph External ["External Services"]
-        GoogleDrive["Google Drive API v3\n& Drive Labels API"]
-        OpenRouterAPI["OpenRouter / LLM Providers\n(Nemotron, Gemini, Claude)"]
-    end
+    Supervisor -.->|"Supervises Process"| Meili
+    Agent -->|"Fuzzy Search"| Meili
+    Agent -->|"Verify Citations"| SQLite
+    Agent <-->|"Completions"| LLM
 
-    %% Client to API
-    UI_Search -->|GET /api/search| FastAPIApp
-    UI_Dir -->|GET /api/documents| FastAPIApp
-    UI_Dir -.->|SSE GET /api/events/live| EventBus
-    UI_Diff -->|GET /api/documents/{id}/diffs| FastAPIApp
-    UI_Agent -->|SSE POST /api/agent/query/stream| FastAPIApp
-    UI_Threads -->|CRUD /api/agent/threads| FastAPIApp
-
-    %% API Internals
-    FastAPIApp --> Supervisor
-    Supervisor -.->|Manages Process| Meili_Index
-    FastAPIApp --> SyncManager
-    SyncManager --> EventBus
-
-    %% Agent Flow
-    FastAPIApp --> AgentEngine
-    AgentEngine --> LLMClient
-    LLMClient <-->|REST Completions| OpenRouterAPI
-    AgentEngine --> AgentTools
-    AgentEngine --> CitationVerifier
-    CitationVerifier --> SQLite_DB
-    AgentTools --> Meili_Index
-    AgentTools --> SQLite_DB
-
-    %% Ingestion Flow
-    SyncManager --> Crawler
-    Crawler --> GoogleDrive
-    Crawler --> Exporter
-    Exporter --> DiffEngine
-    DiffEngine --> Summarizer
-    Summarizer --> OpenRouterAPI
-    DiffEngine --> SQLite_DB
-    Exporter --> Chunker
-    Chunker --> SQLite_DB
-    SyncManager -->|Upsert Docs| Meili_Index
+    Ingest -->|"Crawl Metadata & Text"| Drive
+    Ingest -->|"Diffs & Snapshots"| SQLite
+    Ingest -->|"Upsert Records"| Meili
+    Ingest -->|"Generate Summaries"| LLM
+    Ingest -.->|"Emit Live Events"| EventBus
 ```
 
 ---
