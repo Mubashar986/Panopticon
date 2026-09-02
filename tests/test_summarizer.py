@@ -148,3 +148,62 @@ def test_get_change_summarizer_factory() -> None:
     s2 = get_change_summarizer(Settings(OPENROUTER_API_KEY="sk-or-valid-key"))
     assert isinstance(s2, OpenRouterSummarizer)
     assert s2.api_key == "sk-or-valid-key"
+
+
+def test_clean_summary_thought_tag_stripping() -> None:
+    """Test stripping <thought> tags emitted by models like Nemotron and Qwen."""
+    summarizer = OpenRouterSummarizer(api_key="test")
+    raw = (
+        "<thought>\n"
+        "Let's trace the diff line by line.\n"
+        "Line 15 changed Nibble 14 from empty to populated.\n"
+        "</thought>\n"
+        "Mubashar populated the XOR key for Nibble 14."
+    )
+    cleaned = summarizer._clean_summary(raw)
+    assert cleaned == "Mubashar populated the XOR key for Nibble 14."
+
+
+def test_clean_summary_unclosed_thinking_tag() -> None:
+    """Test stripping unclosed thinking tags when model truncates mid-thought."""
+    summarizer = OpenRouterSummarizer(api_key="test")
+    raw = "<think>\nAnalyzing the changes in the document... The user updated the table"
+    cleaned = summarizer._clean_summary(raw)
+    # The entire text was inside the unclosed <think> tag, so it should be stripped
+    assert cleaned == ""
+
+
+def test_clean_summary_prompt_constraint_echo_stripping() -> None:
+    """Test stripping leaked prompt constraint bullets and analysis steps."""
+    summarizer = OpenRouterSummarizer(api_key="test")
+    raw = (
+        "- Constraints: - Do not repeat the prompt - Do not list metadata - Do not explain reasoning - Output ONLY the final summary sentence\n"
+        "- Input text: A git-style diff showing changes between v3 and v4\n"
+        "1. **Analyze User Input:** Let's trace the changes line by line.\n"
+        "Mubashar cleared the values for Nibbles 14 through 21."
+    )
+    cleaned = summarizer._clean_summary(raw)
+    assert cleaned == "Mubashar cleared the values for Nibbles 14 through 21."
+
+
+def test_openrouter_summarizer_falls_back_when_output_is_only_thoughts() -> None:
+    """Test that OpenRouterSummarizer falls back to HeuristicSummarizer if LLM only emitted thoughts."""
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "choices": [
+            {
+                "message": {
+                    "content": "<thought>Analyzing the diff... line 10 added... I am thinking...</thought>"
+                }
+            }
+        ]
+    }
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        summarizer = OpenRouterSummarizer(api_key="sk-test-key")
+        patch_text = "@@ -1 +1,2 @@\n Line 1\n+Line 2"
+        res = summarizer.summarize_diff(patch_text, "Spec.gdoc", editor="alice@co.com")
+        # Since the LLM output was completely stripped, it must fallback to heuristic summary
+        assert "alice@co.com modified 'Spec.gdoc': added 1 line." == res
+

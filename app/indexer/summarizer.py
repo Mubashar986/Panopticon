@@ -13,10 +13,13 @@ from app.core.logging import get_logger
 logger = get_logger("panopticon.indexer.summarizer")
 
 DEFAULT_SYSTEM_PROMPT = (
-    "You are Panopticon's document change auditor. Directly state what changed in the provided document "
-    "diff in exactly one concise, natural, plain-English sentence. "
-    "Do not repeat the prompt, do not list metadata, and do not explain your reasoning. "
-    "Output ONLY the final summary sentence."
+    "You are Panopticon's executive change auditor. State what changed in the provided document "
+    "diff in exactly one concise, natural, plain-English sentence.\n"
+    "CRITICAL INSTRUCTIONS:\n"
+    "- Output ONLY the final 1-sentence summary.\n"
+    "- Do NOT output thinking tags (<think>, <thought>), scratchpads, or markdown steps.\n"
+    "- Do NOT repeat or echo prompt instructions, constraints, or metadata.\n"
+    "- Begin directly with what happened (e.g. 'Alice updated...', 'The author added...')."
 )
 
 
@@ -90,17 +93,17 @@ class OpenRouterSummarizer:
         """Initialize OpenRouterSummarizer.
 
         Args:
-            api_key: OpenRouter API Key (sk-or-...).
-            model: OpenRouter model identifier string.
-            base_url: OpenRouter API base endpoint.
-            timeout_seconds: Maximum HTTP request duration before fallback.
-            fallback: Backup summarizer used on error or timeout (defaults to HeuristicSummarizer).
+            api_key: OpenRouter API key.
+            model: OpenRouter target model identifier.
+            base_url: Base endpoint URL.
+            timeout_seconds: Timeout for network request.
+            fallback: Fallback summarizer to use if API fails.
         """
-        self.api_key = api_key
-        self.model = model
+        self.api_key = api_key.strip()
+        self.model = model.strip()
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        self.fallback = fallback if fallback is not None else HeuristicSummarizer()
+        self.fallback = fallback or HeuristicSummarizer()
 
     def summarize_diff(
         self,
@@ -170,10 +173,15 @@ class OpenRouterSummarizer:
     @staticmethod
     def _clean_summary(text: str) -> str:
         """Sanitize LLM output to ensure a clean, complete declarative sentence."""
-        # Strip <think>...</think> reasoning blocks if present
-        cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+        # 1. Strip all XML thinking/reasoning blocks (both closed and unclosed)
+        cleaned = re.sub(
+            r"<(think|thought|reasoning|scratchpad|antThinking)>.*?(</\1>|$)",
+            "",
+            text,
+            flags=re.DOTALL | re.IGNORECASE,
+        ).strip()
 
-        # Strip markdown code fences
+        # 2. Strip markdown code fences and boundary quotes
         cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned).strip()
         cleaned = re.sub(r"```$", "", cleaned).strip()
         cleaned = cleaned.strip('"\'`')
@@ -181,28 +189,47 @@ class OpenRouterSummarizer:
         lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
         valid_lines: list[str] = []
 
+        # Prefixes indicating internal chain-of-thought, prompt echo, or analysis scratchpad
+        skipped_prefixes = (
+            "here's a thinking",
+            "thinking process",
+            "thinking:",
+            "analyze user",
+            "analysis:",
+            "step ",
+            "here is a summary",
+            "summary:",
+            "- role:",
+            "- task:",
+            "- input document:",
+            "- input text:",
+            "- constraint:",
+            "- constraints:",
+            "- diff format:",
+            "- source file:",
+            "- diff content:",
+            "- specific diff",
+            "let's analyze",
+            "let's trace",
+            "let's examine",
+            "the diff is about",
+            "the diff shows",
+        )
+
         for line in lines:
-            # Strip markdown list markers and step headers
+            # Strip markdown numbered step headers (e.g., '1. **Analyze User Input:**')
             line_clean = re.sub(r"^\d+\.\s+(\*\*)?", "", line).strip()
+            # Strip markdown headers (e.g., '### Thinking Process:')
+            line_clean = re.sub(r"^#{1,6}\s+", "", line_clean).strip()
             lower = line_clean.lower()
-            if any(lower.startswith(p) for p in [
-                "here's a thinking",
-                "thinking process",
-                "thinking:",
-                "analyze user",
-                "analysis:",
-                "step ",
-                "here is a summary",
-                "summary:",
-                "- role:",
-                "- task:",
-                "- input document:",
-                "- constraint:",
-                "- diff format:",
-                "- source file:",
-                "- diff content:",
-            ]):
+
+            if any(lower.startswith(p) for p in skipped_prefixes):
                 continue
+
+            # Skip lines that are just prompt constraint echoes
+            if "do not repeat" in lower or "do not list metadata" in lower or "output only the" in lower:
+                continue
+
             if line_clean:
                 valid_lines.append(line_clean)
 
