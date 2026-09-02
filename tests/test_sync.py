@@ -247,3 +247,73 @@ def test_sync_creates_versions_and_diffs_on_content_change(tmp_path: Path) -> No
     assert "modified 'Spec Doc'" in diffs[0].ai_summary
 
 
+def test_sync_bootstrap_baseline_unversioned_files(tmp_path: Path) -> None:
+    """Test bootstrapping baseline v1 versions for legacy files and computing diffs on edit."""
+    storage = CrawlStorage(db_path=tmp_path / "sync_unversioned.db")
+    mock_crawler = MagicMock()
+    mock_exporter = MagicMock()
+
+    sync_engine = IncrementalSyncEngine(
+        crawler=mock_crawler,
+        exporter=mock_exporter,
+        storage=storage,
+        summarizer=HeuristicSummarizer(),
+    )
+
+    doc_id = "legacy_doc_101"
+    legacy_file = DriveFileMetadata(
+        id=doc_id,
+        name="Legacy Untracked Doc",
+        mime_type=GOOGLE_DOC_MIME_TYPE,
+        modified_time=datetime(2026, 1, 15, 8, 0, 0, tzinfo=timezone.utc),
+        last_modifying_user="historian@co.com",
+        content_snippet="Legacy content preview before versioning",
+    )
+    # File exists in storage from earlier crawl, but has 0 versions
+    storage.upsert_file(legacy_file)
+    assert storage.count_versions(doc_id) == 0
+    assert doc_id in storage.get_unversioned_file_ids()
+
+    # 1. Run baseline bootstrapping
+    mock_exporter.export_file_content.return_value = ExportResult(
+        file_id=doc_id,
+        status="success",
+        snippet="Legacy content preview",
+        content_text="Chapter 1: The Foundations of the Platform\nParagraph 2: Initial system rules.\n",
+    )
+    bootstrapped = sync_engine.bootstrap_baseline_versions(export_content=True)
+    assert bootstrapped == 1
+    assert storage.count_versions(doc_id) == 1
+    assert doc_id not in storage.get_unversioned_file_ids()
+
+    v1 = storage.get_latest_version(doc_id)
+    assert v1 is not None
+    assert v1.version_number == 1
+
+    # 2. Subsequent edit on legacy doc produces v2 and diff
+    file_v2 = legacy_file.model_copy(
+        update={
+            "modified_time": datetime(2026, 9, 2, 10, 0, 0, tzinfo=timezone.utc),
+            "last_modifying_user": "editor@co.com",
+        }
+    )
+    mock_crawler.crawl_files.side_effect = [iter([file_v2]), iter([])]
+    mock_exporter.export_file_content.return_value = ExportResult(
+        file_id=doc_id,
+        status="success",
+        snippet="Legacy content preview",
+        content_text="Chapter 1: The Foundations of the Platform\nParagraph 2: Updated system rules with PKCE.\n",
+    )
+
+    r_sync = sync_engine.run_sync(full_refresh=False)
+    assert r_sync.updated_count == 1
+    assert storage.count_versions(doc_id) == 2
+    assert storage.count_diffs(doc_id) == 1
+
+    diffs = storage.get_diffs(doc_id)
+    assert len(diffs) == 1
+    assert "-Paragraph 2: Initial system rules." in diffs[0].patch_text
+    assert "+Paragraph 2: Updated system rules with PKCE." in diffs[0].patch_text
+
+
+

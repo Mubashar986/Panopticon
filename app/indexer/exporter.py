@@ -137,9 +137,11 @@ class ContentExporter:
                     size_bytes=payload_size,
                 )
 
-            # Decode UTF-8 defensively, replacing corrupt bytes
-            decoded_str = raw_bytes.decode("utf-8", errors="replace")
+            # Decode UTF-8 defensively, replacing corrupt bytes and stripping BOM
+            decoded_str = raw_bytes.decode("utf-8", errors="replace").lstrip("\ufeff")
             cleaned_text = sanitize_string(decoded_str) or ""
+            if cleaned_text:
+                cleaned_text = cleaned_text.lstrip("\ufeff")
             # Collapse raw carriage returns and newlines for clean search snippets
             snippet = " ".join(cleaned_text[: self.max_snippet_chars].split())
 

@@ -116,3 +116,56 @@ def test_diff_engine_no_trailing_newline() -> None:
     assert res.lines_added == 1
     assert res.lines_removed == 0
     assert "+Line 2" in res.patch_text
+
+
+def test_diff_engine_bom_stripping() -> None:
+    """Test that UTF-8 BOM (\ufeff) is stripped defensively without false diffs."""
+    engine = DiffEngine()
+    old = "\ufeffTitle: System Architecture\nThis is the introduction."
+    new = "Title: System Architecture\nThis is the introduction."
+
+    res = engine.compute_diff(old, new)
+    assert not res.has_changes
+    assert res.lines_added == 0
+    assert res.lines_removed == 0
+
+
+def test_diff_engine_google_docs_dense_prose_segmentation() -> None:
+    """Test that long Google Docs prose paragraphs are segmented into clean sentence diffs."""
+    engine = DiffEngine(max_prose_line_len=100)
+
+    old_doc = (
+        "Panopticon is a real-time project name and document search observatory. "
+        "It continuously indexes Google Docs and Google Sheets across organization drives. "
+        "The system uses Meilisearch for ultra-low-latency fuzzy search queries."
+    )
+    # Modify only the second sentence in the dense paragraph
+    new_doc = (
+        "Panopticon is a real-time project name and document search observatory. "
+        "It continuously indexes Google Docs, Google Sheets, and GitHub repositories across organizations. "
+        "The system uses Meilisearch for ultra-low-latency fuzzy search queries."
+    )
+
+    res = engine.compute_diff(old_doc, new_doc)
+    assert res.has_changes
+    assert res.lines_added == 1
+    assert res.lines_removed == 1
+    # Check that the modified sentence was isolated rather than entire document being replaced
+    assert "+It continuously indexes Google Docs, Google Sheets, and GitHub repositories" in res.patch_text
+    assert "-It continuously indexes Google Docs and Google Sheets" in res.patch_text
+
+
+def test_diff_engine_csv_tabular_preservation() -> None:
+    """Test that CSV rows with commas are never broken across sentences."""
+    engine = DiffEngine(max_prose_line_len=50)
+
+    old_csv = "ID,Name,Description,Status\n1,Alpha,First test item with long text.,Active\n"
+    new_csv = "ID,Name,Description,Status\n1,Alpha,First test item with long text.,Pending\n"
+
+    res = engine.compute_diff(old_csv, new_csv)
+    assert res.has_changes
+    assert res.lines_added == 1
+    assert res.lines_removed == 1
+    assert "-1,Alpha,First test item with long text.,Active" in res.patch_text
+    assert "+1,Alpha,First test item with long text.,Pending" in res.patch_text
+

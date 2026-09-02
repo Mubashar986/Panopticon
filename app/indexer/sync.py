@@ -87,6 +87,8 @@ class IncrementalSyncEngine:
         else:
             query_filter = DEFAULT_DOCS_SHEETS_QUERY
             logger.info("Executing full bootstrap sync (watermark is None or full_refresh=True)")
+            if export_content:
+                self.bootstrap_baseline_versions(export_content=True)
 
         stored_ids_before = self.storage.get_all_file_ids()
         active_ids_seen: set[str] = set()
@@ -270,4 +272,65 @@ class IncrementalSyncEngine:
                 logger.debug("Saved %d semantic chunks for file %s", len(enriched), file_id)
         except Exception as exc:
             logger.warning("Failed to chunk and embed file %s: %s", file_id, exc)
+
+    def bootstrap_baseline_versions(self, export_content: bool = True) -> int:
+        """Bootstrap initial v1 version snapshots and chunks for existing unversioned documents.
+
+        Ensures that every tracked document has an initial baseline v1 snapshot in SQLite,
+        guaranteeing that subsequent edits (additions, modifications, deletions) reliably
+        compute unified diffs and AI change summaries instead of silently saving v1.
+
+        Args:
+            export_content: Whether to fetch full plain text via exporter if not already cached.
+
+        Returns:
+            int: Number of unversioned documents successfully bootstrapped with baseline v1.
+        """
+        unversioned_ids = self.storage.get_unversioned_file_ids()
+        if not unversioned_ids:
+            return 0
+
+        logger.info(
+            "Bootstrapping baseline versions for %d unversioned documents...",
+            len(unversioned_ids),
+        )
+        bootstrapped_count = 0
+
+        for fid in unversioned_ids:
+            file_record = self.storage.get_file(fid)
+            if not file_record:
+                continue
+
+            text_to_save: str | None = None
+            if export_content:
+                try:
+                    res = self.exporter.export_file_content(fid, file_record.mime_type)
+                    if res.content_text:
+                        text_to_save = res.content_text
+                except Exception as exc:
+                    logger.debug("Content export failed during baseline bootstrap (%s): %s", fid, exc)
+
+            if not text_to_save and file_record.content_snippet:
+                text_to_save = file_record.content_snippet
+
+            if text_to_save:
+                content_hash = hashlib.sha256(text_to_save.encode("utf-8")).hexdigest()
+                saved_ver = self.storage.save_version(
+                    DocumentVersion(
+                        file_id=fid,
+                        version_number=1,
+                        content_hash=content_hash,
+                        snapshot_text=text_to_save,
+                        modified_time=file_record.modified_time,
+                        editor=file_record.last_modifying_user,
+                    )
+                )
+                self._generate_and_save_chunks(
+                    text_to_save, fid, file_record.name, saved_ver.id
+                )
+                bootstrapped_count += 1
+
+        logger.info("Successfully bootstrapped %d baseline document versions.", bootstrapped_count)
+        return bootstrapped_count
+
 

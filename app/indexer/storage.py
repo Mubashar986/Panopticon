@@ -684,6 +684,23 @@ class CrawlStorage:
                 return self._row_to_version_model(row)
         return None
 
+    def get_unversioned_file_ids(self) -> list[str]:
+        """Return list of active, non-trashed file IDs that do not yet have a recorded version snapshot.
+
+        Used to automatically bootstrap initial v1 version baselines for historical documents.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT f.id
+                FROM file_records f
+                LEFT JOIN document_versions v ON f.id = v.file_id
+                WHERE f.trashed = 0 AND v.id IS NULL
+                ORDER BY f.modified_time DESC
+                """
+            )
+            return [row["id"] for row in cursor.fetchall()]
+
     def get_version(self, version_id: str) -> DocumentVersion | None:
         """Lookup a specific version snapshot by its unique ID.
 
