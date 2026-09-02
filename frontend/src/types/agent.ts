@@ -40,3 +40,28 @@ export type AgentStreamEventType =
   | 'citations'
   | 'done'
   | 'error';
+
+export interface AgentThread {
+  id: string;
+  title: string;
+  model?: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ChatMessageWireItem {
+  id: string;
+  thread_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  trace?: AgentStepTraceItem[];
+  citations?: VerifiedCitationItem[];
+  model?: string | null;
+  latency_ms?: number | null;
+  created_at: string;
+}
+
+export interface AgentThreadDetail extends AgentThread {
+  messages: ChatMessageWireItem[];
+}

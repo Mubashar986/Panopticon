@@ -13,6 +13,7 @@ from app.agent.tools import PANOPTICON_TOOLS, AgentToolContext, execute_tool
 from app.core.llm import LLMClient, LLMMessage, get_llm_client
 from app.core.logging import get_logger
 from app.indexer.embeddings import get_embedding_provider
+from app.indexer.models import AgentMessage
 from app.indexer.storage import get_crawl_storage
 from app.search.service import SearchService
 
@@ -87,7 +88,12 @@ class AgenticReasoningEngine:
         )
         self.max_steps = max_steps
 
-    def run(self, query: str, user_instructions: str | None = None) -> AgentRunResult:
+    def run(
+        self,
+        query: str,
+        user_instructions: str | None = None,
+        history: list[AgentMessage] | None = None,
+    ) -> AgentRunResult:
         """Execute the ReAct loop to answer user query autonomously."""
         start_time = time.perf_counter()
         clean_query = query.strip()
@@ -107,8 +113,19 @@ class AgenticReasoningEngine:
 
         messages: list[LLMMessage] = [
             LLMMessage(role="system", content=system_content),
-            LLMMessage(role="user", content=clean_query),
         ]
+
+        # Multi-turn Context Compaction (RFC-0002):
+        # Inject prior dialog turns as clean user/assistant messages.
+        # Intermediate tool outputs from prior turns are pruned to prevent context bloat.
+        if history:
+            for hist_msg in history:
+                if hist_msg.role in ("user", "assistant") and hist_msg.content.strip():
+                    messages.append(
+                        LLMMessage(role=hist_msg.role, content=hist_msg.content.strip())
+                    )
+
+        messages.append(LLMMessage(role="user", content=clean_query))
 
         trace: list[AgentStepTrace] = []
         tools_used: list[str] = []
@@ -202,6 +219,7 @@ class AgenticReasoningEngine:
         self,
         query: str,
         user_instructions: str | None = None,
+        history: list[AgentMessage] | None = None,
     ) -> Iterator[AgentStreamEvent]:
         """Execute the ReAct loop yielding real-time SSE stream events."""
         start_time = time.perf_counter()
@@ -219,8 +237,19 @@ class AgenticReasoningEngine:
 
         messages: list[LLMMessage] = [
             LLMMessage(role="system", content=system_content),
-            LLMMessage(role="user", content=clean_query),
         ]
+
+        # Multi-turn Context Compaction (RFC-0002):
+        # Inject prior dialog turns as clean user/assistant messages.
+        # Intermediate tool outputs from prior turns are pruned to prevent context bloat.
+        if history:
+            for hist_msg in history:
+                if hist_msg.role in ("user", "assistant") and hist_msg.content.strip():
+                    messages.append(
+                        LLMMessage(role=hist_msg.role, content=hist_msg.content.strip())
+                    )
+
+        messages.append(LLMMessage(role="user", content=clean_query))
 
         trace: list[AgentStepTrace] = []
         tools_used: list[str] = []

@@ -24,10 +24,77 @@ class AgentQueryRequest(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     query: str = Field(..., min_length=1, description="Question or task for the agent to investigate")
+    thread_id: str | None = Field(default=None, description="Optional conversation thread identifier")
     model: str | None = Field(default=None, description="Optional override model ID")
     user_instructions: str | None = Field(
         default=None, description="Optional custom guidelines (e.g. 'Format in markdown table')"
     )
+
+
+class AgentThreadItem(BaseModel):
+    """Wire representation of a conversation thread summary."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(..., description="Unique thread identifier")
+    title: str = Field(..., description="Title of the thread")
+    model: str | None = Field(default=None, description="Model ID used in this thread")
+    created_at: str = Field(..., description="ISO 8601 creation timestamp")
+    updated_at: str = Field(..., description="ISO 8601 last update timestamp")
+    message_count: int = Field(default=0, description="Total messages in thread")
+
+
+class ChatMessageWireItem(BaseModel):
+    """Wire representation of an individual message turn in a thread."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(..., description="Unique message identifier")
+    thread_id: str = Field(..., description="Parent thread identifier")
+    role: str = Field(..., description="Message sender role ('user' | 'assistant')")
+    content: str = Field(..., description="Message text content")
+    trace: list[AgentStepTraceItem] = Field(
+        default_factory=list, description="Execution trace of tool calls"
+    )
+    citations: list[VerifiedCitationItem] = Field(
+        default_factory=list, description="Verified document citations"
+    )
+    model: str | None = Field(default=None, description="Model ID used")
+    latency_ms: float | None = Field(default=None, description="Execution latency in ms")
+    created_at: str = Field(..., description="ISO 8601 creation timestamp")
+
+
+class AgentThreadDetail(BaseModel):
+    """Wire representation of a thread including full message history."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str = Field(..., description="Unique thread identifier")
+    title: str = Field(..., description="Title of the thread")
+    model: str | None = Field(default=None, description="Model ID used in this thread")
+    created_at: str = Field(..., description="ISO 8601 creation timestamp")
+    updated_at: str = Field(..., description="ISO 8601 last update timestamp")
+    message_count: int = Field(default=0, description="Total messages in thread")
+    messages: list[ChatMessageWireItem] = Field(
+        default_factory=list, description="Chronological message list"
+    )
+
+
+class CreateThreadRequest(BaseModel):
+    """Request payload to create a new thread."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str | None = Field(default=None, description="Optional title for thread")
+    model: str | None = Field(default=None, description="Optional model for thread")
+
+
+class UpdateThreadRequest(BaseModel):
+    """Request payload to update a thread's title."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = Field(..., min_length=1, max_length=200, description="Updated thread title")
 
 
 class VerifiedCitationItem(BaseModel):

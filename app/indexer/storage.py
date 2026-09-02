@@ -7,11 +7,14 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+import uuid
 
 from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.indexer.embeddings import cosine_similarity
 from app.indexer.models import (
+    AgentMessage,
+    AgentThread,
     DocumentChunk,
     DocumentDiff,
     DocumentVersion,
@@ -145,6 +148,30 @@ class CrawlStorage:
                 CREATE INDEX IF NOT EXISTS idx_diffs_versions ON document_diffs(from_version_id, to_version_id);
                 CREATE INDEX IF NOT EXISTS idx_chunks_file_idx ON document_chunks(file_id, chunk_index);
                 CREATE INDEX IF NOT EXISTS idx_chunks_version ON document_chunks(version_id);
+
+                CREATE TABLE IF NOT EXISTS agent_threads (
+                    id TEXT PRIMARY KEY,
+                    title TEXT NOT NULL,
+                    model TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS agent_messages (
+                    id TEXT PRIMARY KEY,
+                    thread_id TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    trace_json TEXT,
+                    citations_json TEXT,
+                    model TEXT,
+                    latency_ms REAL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (thread_id) REFERENCES agent_threads(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_threads_updated_at ON agent_threads(updated_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON agent_messages(thread_id, created_at ASC);
                 """
             )
         logger.debug("Initialized SQLite storage schema at %s", self.db_path)
@@ -991,6 +1018,266 @@ class CrawlStorage:
             word_count=row["word_count"],
             embedding=embedding,
             created_at=datetime.fromisoformat(row["created_at"]),
+        )
+
+    # -------------------------------------------------------------------------
+    # Multi-Turn Agent Threads & Messages Repository Methods (Task 9.8 / RFC-0002)
+    # -------------------------------------------------------------------------
+
+    def create_thread(
+        self,
+        title: str = "New Conversation",
+        model: str | None = None,
+        thread_id: str | None = None,
+    ) -> AgentThread:
+        """Create and persist a new conversation thread.
+
+        Args:
+            title: Human-readable title of the thread.
+            model: Optional model identifier.
+            thread_id: Optional explicit thread identifier. If None, generated.
+
+        Returns:
+            AgentThread: Created thread domain model.
+        """
+        now = datetime.now(timezone.utc)
+        thread = AgentThread(
+            id=thread_id or f"th_{uuid.uuid4().hex[:12]}",
+            title=title.strip() if title else "New Conversation",
+            model=model.strip() if model else None,
+            created_at=now,
+            updated_at=now,
+            message_count=0,
+        )
+
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_threads (id, title, model, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    thread.id,
+                    thread.title,
+                    thread.model,
+                    thread.created_at.isoformat(),
+                    thread.updated_at.isoformat(),
+                ),
+            )
+        logger.debug("Created agent thread %s with title '%s'", thread.id, thread.title)
+        return thread
+
+    def get_thread(self, thread_id: str) -> AgentThread | None:
+        """Retrieve a thread by its identifier, including its total message count.
+
+        Args:
+            thread_id: Thread unique identifier.
+
+        Returns:
+            AgentThread | None: Domain model if found, else None.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT t.*, COUNT(m.id) as message_count
+                FROM agent_threads t
+                LEFT JOIN agent_messages m ON t.id = m.thread_id
+                WHERE t.id = ?
+                GROUP BY t.id
+                """,
+                (thread_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_thread_model(row)
+
+    def list_threads(self, limit: int = 50, offset: int = 0) -> list[AgentThread]:
+        """List conversation threads ordered by last updated time descending.
+
+        Args:
+            limit: Maximum number of threads to return.
+            offset: Pagination offset.
+
+        Returns:
+            list[AgentThread]: Ordered list of threads.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT t.*, COUNT(m.id) as message_count
+                FROM agent_threads t
+                LEFT JOIN agent_messages m ON t.id = m.thread_id
+                GROUP BY t.id
+                ORDER BY t.updated_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            )
+            return [self._row_to_thread_model(row) for row in cursor.fetchall()]
+
+    def update_thread_title(self, thread_id: str, title: str) -> AgentThread | None:
+        """Update the title of an existing thread and bump its updated_at timestamp.
+
+        Args:
+            thread_id: Target thread identifier.
+            title: New thread title.
+
+        Returns:
+            AgentThread | None: Updated thread if found, else None.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        clean_title = title.strip() if title else "Untitled Conversation"
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE agent_threads
+                SET title = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (clean_title, now, thread_id),
+            )
+            if cursor.rowcount == 0:
+                return None
+        return self.get_thread(thread_id)
+
+    def touch_thread(self, thread_id: str) -> bool:
+        """Bump the updated_at timestamp of a thread.
+
+        Args:
+            thread_id: Target thread identifier.
+
+        Returns:
+            bool: True if thread was updated, False if not found.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE agent_threads SET updated_at = ? WHERE id = ?",
+                (now, thread_id),
+            )
+            return cursor.rowcount > 0
+
+    def delete_thread(self, thread_id: str) -> bool:
+        """Delete a conversation thread and all its messages (via ON DELETE CASCADE).
+
+        Args:
+            thread_id: Target thread identifier.
+
+        Returns:
+            bool: True if thread was found and deleted, False otherwise.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM agent_threads WHERE id = ?",
+                (thread_id,),
+            )
+            deleted = cursor.rowcount > 0
+        if deleted:
+            logger.info("Deleted agent thread %s and its cascaded messages", thread_id)
+        return deleted
+
+    def save_message(self, message: AgentMessage) -> AgentMessage:
+        """Persist a conversation turn message and bump the parent thread's updated_at.
+
+        Args:
+            message: Message domain model to persist.
+
+        Returns:
+            AgentMessage: Persisted message model.
+        """
+        now_str = message.created_at.isoformat()
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_messages (
+                    id, thread_id, role, content, trace_json, citations_json, model, latency_ms, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    message.id,
+                    message.thread_id,
+                    message.role,
+                    message.content,
+                    message.trace_json,
+                    message.citations_json,
+                    message.model,
+                    message.latency_ms,
+                    now_str,
+                ),
+            )
+            # Bump parent thread updated_at
+            conn.execute(
+                "UPDATE agent_threads SET updated_at = ? WHERE id = ?",
+                (now_str, message.thread_id),
+            )
+        return message
+
+    def get_thread_messages(self, thread_id: str) -> list[AgentMessage]:
+        """Retrieve all chronological messages for a conversation thread.
+
+        Args:
+            thread_id: Target thread identifier.
+
+        Returns:
+            list[AgentMessage]: Chronologically ordered messages (ASC).
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT * FROM agent_messages
+                WHERE thread_id = ?
+                ORDER BY created_at ASC
+                """,
+                (thread_id,),
+            )
+            return [self._row_to_message_model(row) for row in cursor.fetchall()]
+
+    def delete_thread_messages(self, thread_id: str) -> bool:
+        """Delete all messages belonging to a thread without deleting the thread itself.
+
+        Args:
+            thread_id: Target thread identifier.
+
+        Returns:
+            bool: True if messages were deleted.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM agent_messages WHERE thread_id = ?",
+                (thread_id,),
+            )
+            return cursor.rowcount > 0
+
+    @staticmethod
+    def _row_to_thread_model(row: sqlite3.Row) -> AgentThread:
+        """Convert a database row into an AgentThread domain model."""
+        created_at = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+        updated_at = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00"))
+        message_count = int(row["message_count"]) if "message_count" in row.keys() else 0
+        return AgentThread(
+            id=row["id"],
+            title=row["title"],
+            model=row["model"],
+            created_at=created_at,
+            updated_at=updated_at,
+            message_count=message_count,
+        )
+
+    @staticmethod
+    def _row_to_message_model(row: sqlite3.Row) -> AgentMessage:
+        """Convert a database row into an AgentMessage domain model."""
+        created_at = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+        return AgentMessage(
+            id=row["id"],
+            thread_id=row["thread_id"],
+            role=row["role"],
+            content=row["content"],
+            trace_json=row["trace_json"],
+            citations_json=row["citations_json"],
+            model=row["model"],
+            latency_ms=float(row["latency_ms"]) if row["latency_ms"] is not None else None,
+            created_at=created_at,
         )
 
 
