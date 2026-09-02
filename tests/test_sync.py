@@ -109,6 +109,7 @@ def test_sync_incremental_with_watermark(tmp_path: Path) -> None:
         crawler=mock_crawler,
         exporter=mock_exporter,
         storage=storage,
+        watermark_buffer_seconds=0,
     )
 
     result = sync_engine.run_sync(full_refresh=False)
@@ -120,9 +121,64 @@ def test_sync_incremental_with_watermark(tmp_path: Path) -> None:
     assert result.total_stored == 2  # doc_1 + doc_new
     assert storage.count_files() == 2
 
-    # Verify query included watermark
+    # Verify query included watermark with >=
     first_call_kwargs = mock_crawler.crawl_files.call_args_list[0][1]
-    assert "modifiedTime > '2026-08-26T00:00:00Z'" in first_call_kwargs["query_filter"]
+    assert "modifiedTime >= '2026-08-26T00:00:00Z'" in first_call_kwargs["query_filter"]
+
+
+def test_sync_safety_buffer_rapid_edit_and_unchanged_skip(tmp_path: Path) -> None:
+    """Test that safety buffer window queries previous window but skips re-exporting unchanged files."""
+    storage = CrawlStorage(db_path=tmp_path / "sync_buffer.db")
+
+    # File 1 was synced at 10:00:00 with modified_time 10:00:00
+    f1 = DriveFileMetadata(
+        id="doc_unchanged",
+        name="Unchanged Doc",
+        mime_type=GOOGLE_DOC_MIME_TYPE,
+        modified_time=datetime(2026, 9, 2, 10, 0, 0, tzinfo=timezone.utc),
+    )
+    storage.upsert_file(f1)
+    storage.set_watermark(datetime(2026, 9, 2, 10, 1, 0, tzinfo=timezone.utc))
+
+    mock_crawler = MagicMock()
+    mock_exporter = MagicMock()
+
+    # File 2 was rapidly edited within the 2-minute safety window (at 10:00:30)
+    f2_rapid = DriveFileMetadata(
+        id="doc_rapid",
+        name="Rapidly Edited Doc",
+        mime_type=GOOGLE_DOC_MIME_TYPE,
+        modified_time=datetime(2026, 9, 2, 10, 0, 30, tzinfo=timezone.utc),
+    )
+
+    # Google Drive query with 120s buffer returns both doc_unchanged and doc_rapid
+    mock_crawler.crawl_files.side_effect = [iter([f1, f2_rapid]), iter([])]
+    mock_exporter.export_file_content.return_value = ExportResult(
+        file_id="doc_rapid",
+        status="success",
+        snippet="new snippet",
+        content_text="Brand new rapid content\n",
+    )
+
+    sync_engine = IncrementalSyncEngine(
+        crawler=mock_crawler,
+        exporter=mock_exporter,
+        storage=storage,
+        watermark_buffer_seconds=120,
+    )
+
+    res = sync_engine.run_sync(full_refresh=False)
+
+    # doc_rapid is added as a new file, doc_unchanged is skipped from re-export
+    assert res.added_count == 1
+    assert res.updated_count == 0
+    # Exporter was only called for doc_rapid, NEVER for doc_unchanged!
+    assert mock_exporter.export_file_content.call_count == 1
+    assert mock_exporter.export_file_content.call_args[0][0] == "doc_rapid"
+
+    # Query had watermark minus 120s (10:01:00 - 2m = 09:59:00)
+    q = mock_crawler.crawl_files.call_args_list[0][1]["query_filter"]
+    assert "modifiedTime >= '2026-09-02T09:59:00Z'" in q
 
 
 def test_sync_deletion_detection_on_full_refresh(tmp_path: Path) -> None:

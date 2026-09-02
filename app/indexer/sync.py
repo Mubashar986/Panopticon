@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.core.logging import get_logger
 from app.indexer.chunker import TextChunker
@@ -22,6 +22,8 @@ from app.indexer.summarizer import ChangeSummarizer, get_change_summarizer
 
 logger = get_logger("panopticon.indexer.sync")
 
+DEFAULT_WATERMARK_BUFFER_SECONDS: int = 120
+
 
 class IncrementalSyncEngine:
     """Coordinates high-watermark delta crawling, content extraction, and SQLite storage."""
@@ -35,6 +37,7 @@ class IncrementalSyncEngine:
         summarizer: ChangeSummarizer | None = None,
         chunker: TextChunker | None = None,
         embedding_provider: EmbeddingProvider | None = None,
+        watermark_buffer_seconds: int = DEFAULT_WATERMARK_BUFFER_SECONDS,
     ) -> None:
         """Initialize IncrementalSyncEngine with injected dependencies.
 
@@ -46,6 +49,7 @@ class IncrementalSyncEngine:
             summarizer: Optional ChangeSummarizer instance.
             chunker: Optional TextChunker instance.
             embedding_provider: Optional EmbeddingProvider instance.
+            watermark_buffer_seconds: Safety overlap window (seconds) to prevent orphaning rapid edits due to Google Drive eventual consistency latency.
         """
         self.crawler = crawler if crawler is not None else DriveCrawler()
         self.exporter = exporter if exporter is not None else ContentExporter()
@@ -54,6 +58,7 @@ class IncrementalSyncEngine:
         self.summarizer = summarizer if summarizer is not None else get_change_summarizer()
         self.chunker = chunker if chunker is not None else TextChunker()
         self.embedding_provider = embedding_provider if embedding_provider is not None else get_embedding_provider()
+        self.watermark_buffer_seconds = watermark_buffer_seconds
 
     def run_sync(
         self,
@@ -79,11 +84,18 @@ class IncrementalSyncEngine:
         if not full_refresh:
             watermark_used = self.storage.get_watermark()
 
-        # Build delta query if watermark exists
+        # Build delta query with sliding overlap safety buffer if watermark exists
+        effective_iso: str | None = None
         if watermark_used is not None:
-            watermark_iso = watermark_used.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-            query_filter = f"{DEFAULT_DOCS_SHEETS_QUERY} and modifiedTime > '{watermark_iso}'"
-            logger.info("Executing incremental sync with watermark: %s", watermark_iso)
+            effective_watermark = watermark_used - timedelta(seconds=self.watermark_buffer_seconds)
+            effective_iso = effective_watermark.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+            query_filter = f"{DEFAULT_DOCS_SHEETS_QUERY} and modifiedTime >= '{effective_iso}'"
+            logger.info(
+                "Executing incremental sync with %ds safety buffer: %s (raw watermark: %s)",
+                self.watermark_buffer_seconds,
+                effective_iso,
+                watermark_used.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            )
         else:
             query_filter = DEFAULT_DOCS_SHEETS_QUERY
             logger.info("Executing full bootstrap sync (watermark is None or full_refresh=True)")
@@ -107,10 +119,19 @@ class IncrementalSyncEngine:
             file_id = raw_file.id
             active_ids_seen.add(file_id)
 
-            if file_id in stored_ids_before:
-                updated_count += 1
-            else:
+            existing_file = self.storage.get_file(file_id) if file_id in stored_ids_before else None
+            is_new = existing_file is None
+            is_modified = not is_new and existing_file.modified_time != raw_file.modified_time
+
+            # If incremental sync and file was caught in overlap window but has not actually changed, update last_seen_at and skip re-export
+            if not full_refresh and watermark_used is not None and not is_new and not is_modified and existing_file is not None:
+                self.storage.upsert_file(existing_file, last_seen_at=sync_start_time)
+                continue
+
+            if is_new:
                 added_count += 1
+            else:
+                updated_count += 1
 
             # Extract content, save file record, and handle version snapshots / diffs
             if export_content:
@@ -198,10 +219,10 @@ class IncrementalSyncEngine:
             # On full refresh: any ID previously stored but not seen in active crawl is deleted
             deleted_ids_to_purge = stored_ids_before - active_ids_seen
         else:
-            # On incremental run: query Google Drive trash for files trashed since watermark
+            # On incremental run: query Google Drive trash for files trashed since effective buffered watermark
             trash_query = (
                 f"trashed = true and (mimeType = '{GOOGLE_DOC_MIME_TYPE}' or mimeType = '{GOOGLE_SHEET_MIME_TYPE}') "
-                f"and modifiedTime > '{watermark_iso}'"
+                f"and modifiedTime >= '{effective_iso}'"
             )
             try:
                 for trashed_file in self.crawler.crawl_files(
