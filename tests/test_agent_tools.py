@@ -100,8 +100,9 @@ def tool_context(test_storage: CrawlStorage) -> AgentToolContext:
 
 def test_panopticon_tools_declaration():
     """Verify tool schemas are valid and contain required fields."""
-    assert len(PANOPTICON_TOOLS) == 4
+    assert len(PANOPTICON_TOOLS) == 5
     tool_names = [t.name for t in PANOPTICON_TOOLS]
+    assert "get_document_catalog_stats" in tool_names
     assert "search_index" in tool_names
     assert "get_document_diff" in tool_names
     assert "get_file_metadata" in tool_names
@@ -155,6 +156,25 @@ def test_tool_semantic_chunk_search(tool_context: AgentToolContext):
     assert data["chunks_count"] >= 1
     assert data["chunks"][0]["file_id"] == "doc_falcon_01"
     assert "OAuth" in data["chunks"][0]["text"]
+
+
+def test_tool_get_document_catalog_stats(tool_context: AgentToolContext):
+    """Verify get_document_catalog_stats returns corpus inventory and breakdown."""
+    out = execute_tool("get_document_catalog_stats", {}, tool_context)
+    data = json.loads(out)
+    assert data["status"] == "success"
+    inv = data["inventory"]
+    assert inv["total_files"] == 1
+    assert inv["docs_count"] == 1
+    assert inv["sheets_count"] == 0
+    assert inv["total_versions"] == 2
+    assert inv["total_diffs"] == 1
+    assert inv["total_chunks"] == 1
+    assert inv["files_with_zero_chunks"] == 0
+    assert inv["project_tags_distribution"]["Falcon"] == 1
+    assert inv["project_tags_distribution"]["Security"] == 1
+    assert len(inv["recent_files"]) == 1
+    assert inv["recent_files"][0]["name"] == "Project Falcon Technical Specification"
 
 
 def test_tool_unknown_tool_and_error_handling(tool_context: AgentToolContext):

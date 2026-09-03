@@ -261,3 +261,24 @@ def test_openrouter_client_missing_choices():
             client.complete(messages=[LLMMessage(role="user", content="Hi")])
         assert "no choices" in str(exc_info.value)
 
+
+def test_openrouter_client_http_403_error_payload():
+    """Verify OpenRouterClient extracts provider error message on HTTP 403 Forbidden."""
+    client = OpenRouterClient(api_key="sk-test-key", model="thinkingmachines/inkling:free")
+
+    mock_resp = MagicMock(spec=httpx.Response)
+    mock_resp.status_code = 403
+    mock_resp.json.return_value = {
+        "error": {
+            "message": "Data collection must be enabled in your OpenRouter privacy settings to use this model.",
+            "code": 403,
+        }
+    }
+
+    with patch("httpx.Client.post", return_value=mock_resp):
+        with pytest.raises(LLMAPIError) as exc_info:
+            client.complete(messages=[LLMMessage(role="user", content="Hi")])
+        assert "LLM Provider Error [403]" in str(exc_info.value)
+        assert "Data collection must be enabled" in str(exc_info.value)
+
+

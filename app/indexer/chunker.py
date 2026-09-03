@@ -5,23 +5,32 @@ from __future__ import annotations
 import hashlib
 import re
 
+from app.core.config import get_settings
 from app.indexer.models import DocumentChunk
 
 
 class TextChunker:
     """Slices plain text documents into overlapping contextual passages with metadata anchors."""
 
-    def __init__(self, chunk_size: int = 1500, overlap: int = 200) -> None:
+    def __init__(
+        self,
+        chunk_size: int | None = None,
+        overlap: int | None = None,
+    ) -> None:
         """Initialize chunker with size and overlap constraints.
 
         Args:
             chunk_size: Target maximum character length of each chunk before metadata prefix.
             overlap: Number of characters to preserve from the previous chunk.
         """
-        if overlap >= chunk_size:
-            raise ValueError(f"Overlap ({overlap}) must be strictly less than chunk_size ({chunk_size})")
-        self.chunk_size = chunk_size
-        self.overlap = overlap
+        settings = get_settings()
+        effective_chunk_size = chunk_size if chunk_size is not None else settings.CHUNK_SIZE
+        effective_overlap = overlap if overlap is not None else settings.CHUNK_OVERLAP
+
+        if effective_overlap >= effective_chunk_size:
+            raise ValueError(f"Overlap ({effective_overlap}) must be strictly less than chunk_size ({effective_chunk_size})")
+        self.chunk_size = effective_chunk_size
+        self.overlap = effective_overlap
 
     def chunk_document(
         self,

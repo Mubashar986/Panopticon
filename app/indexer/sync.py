@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.indexer.chunker import TextChunker
 from app.indexer.crawler import DEFAULT_DOCS_SHEETS_QUERY, DriveCrawler
@@ -37,7 +38,7 @@ class IncrementalSyncEngine:
         summarizer: ChangeSummarizer | None = None,
         chunker: TextChunker | None = None,
         embedding_provider: EmbeddingProvider | None = None,
-        watermark_buffer_seconds: int = DEFAULT_WATERMARK_BUFFER_SECONDS,
+        watermark_buffer_seconds: int | None = None,
     ) -> None:
         """Initialize IncrementalSyncEngine with injected dependencies.
 
@@ -58,7 +59,11 @@ class IncrementalSyncEngine:
         self.summarizer = summarizer if summarizer is not None else get_change_summarizer()
         self.chunker = chunker if chunker is not None else TextChunker()
         self.embedding_provider = embedding_provider if embedding_provider is not None else get_embedding_provider()
-        self.watermark_buffer_seconds = watermark_buffer_seconds
+        self.watermark_buffer_seconds = (
+            watermark_buffer_seconds
+            if watermark_buffer_seconds is not None
+            else get_settings().SYNC_WATERMARK_BUFFER_SECONDS
+        )
 
     def run_sync(
         self,

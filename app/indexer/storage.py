@@ -1249,6 +1249,123 @@ class CrawlStorage:
             )
             return cursor.rowcount > 0
 
+    def get_catalog_stats(self) -> dict[str, Any]:
+        """Aggregate high-level corpus inventory statistics from SQLite tables.
+
+        Returns:
+            dict containing file counts, type breakdown, versions, chunks, and tags.
+        """
+        with self.get_connection() as conn:
+            # 1. File counts by MIME type (only non-trashed files)
+            mime_cursor = conn.execute(
+                """
+                SELECT
+                    COUNT(*) as total,
+                    SUM(CASE WHEN mime_type = 'application/vnd.google-apps.document' THEN 1 ELSE 0 END) as docs_count,
+                    SUM(CASE WHEN mime_type = 'application/vnd.google-apps.spreadsheet' THEN 1 ELSE 0 END) as sheets_count,
+                    SUM(CASE WHEN mime_type NOT IN (
+                        'application/vnd.google-apps.document',
+                        'application/vnd.google-apps.spreadsheet'
+                    ) THEN 1 ELSE 0 END) as other_count
+                FROM file_records
+                WHERE trashed = 0
+                """
+            )
+            mime_row = mime_cursor.fetchone()
+            total_files = int(mime_row["total"] or 0)
+            docs_count = int(mime_row["docs_count"] or 0)
+            sheets_count = int(mime_row["sheets_count"] or 0)
+            other_count = int(mime_row["other_count"] or 0)
+
+            # 2. Version and Diff counts
+            v_row = conn.execute("SELECT COUNT(*) as c FROM document_versions").fetchone()
+            total_versions = int(v_row["c"] or 0)
+
+            d_row = conn.execute("SELECT COUNT(*) as c FROM document_diffs").fetchone()
+            total_diffs = int(d_row["c"] or 0)
+
+            # 3. Chunks count & files missing chunks
+            c_row = conn.execute("SELECT COUNT(*) as c FROM document_chunks").fetchone()
+            total_chunks = int(c_row["c"] or 0)
+
+            zero_chunks_cursor = conn.execute(
+                """
+                SELECT COUNT(*) as c FROM file_records f
+                WHERE f.trashed = 0
+                  AND (SELECT COUNT(*) FROM document_chunks c WHERE c.file_id = f.id) = 0
+                """
+            )
+            files_with_zero_chunks = int(zero_chunks_cursor.fetchone()["c"] or 0)
+
+            # 4. Project tags distribution
+            tag_dist: dict[str, int] = {}
+            tag_cursor = conn.execute(
+                "SELECT project_tags_json FROM file_records WHERE trashed = 0 AND project_tags_json IS NOT NULL"
+            )
+            for row in tag_cursor.fetchall():
+                if row["project_tags_json"]:
+                    try:
+                        tags = json.loads(row["project_tags_json"])
+                        for t in tags:
+                            if t and str(t).strip():
+                                tag_clean = str(t).strip()
+                                tag_dist[tag_clean] = tag_dist.get(tag_clean, 0) + 1
+                    except Exception:
+                        pass
+
+            # 5. Sharing status distribution
+            sharing_dist: dict[str, int] = {}
+            sharing_cursor = conn.execute(
+                "SELECT sharing_status, COUNT(*) as c FROM file_records WHERE trashed = 0 GROUP BY sharing_status"
+            )
+            for row in sharing_cursor.fetchall():
+                status = row["sharing_status"] or "unknown"
+                sharing_dist[status] = int(row["c"])
+
+            # 6. Recent 5 files
+            recent_cursor = conn.execute(
+                """
+                SELECT id, name, mime_type, modified_time, project_tags_json
+                FROM file_records
+                WHERE trashed = 0
+                ORDER BY modified_time DESC NULLS LAST
+                LIMIT 5
+                """
+            )
+            recent_files = []
+            for row in recent_cursor.fetchall():
+                tags = []
+                if row["project_tags_json"]:
+                    try:
+                        tags = json.loads(row["project_tags_json"])
+                    except Exception:
+                        pass
+                recent_files.append({
+                    "file_id": row["id"],
+                    "name": row["name"],
+                    "type": (
+                        "doc"
+                        if "document" in (row["mime_type"] or "")
+                        else ("sheet" if "spreadsheet" in (row["mime_type"] or "") else "other")
+                    ),
+                    "modified_time": row["modified_time"],
+                    "project_tags": tags,
+                })
+
+            return {
+                "total_files": total_files,
+                "docs_count": docs_count,
+                "sheets_count": sheets_count,
+                "other_count": other_count,
+                "total_versions": total_versions,
+                "total_diffs": total_diffs,
+                "total_chunks": total_chunks,
+                "files_with_zero_chunks": files_with_zero_chunks,
+                "project_tags_distribution": tag_dist,
+                "sharing_status_distribution": sharing_dist,
+                "recent_files": recent_files,
+            }
+
     @staticmethod
     def _row_to_thread_model(row: sqlite3.Row) -> AgentThread:
         """Convert a database row into an AgentThread domain model."""

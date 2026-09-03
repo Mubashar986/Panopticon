@@ -1,4 +1,4 @@
-"""Pydantic wire schemas for LLM Settings and Health Probes."""
+"""Pydantic wire schemas for LLM Settings, Dynamic Model Discovery, and Health Probes."""
 
 from __future__ import annotations
 
@@ -52,3 +52,16 @@ class LLMTestConnectionResponse(BaseModel):
     latency_ms: float = Field(..., description="Round-trip latency in milliseconds")
     message: str = Field(..., description="Response message or detailed error")
     model_tested: str = Field(..., description="Model ID used during test probe")
+
+
+class LLMModelsDiscoveryResponse(BaseModel):
+    """Result of dynamic model discovery from an OpenAI-compatible gateway."""
+
+    model_config = ConfigDict(frozen=True)
+
+    success: bool = Field(..., description="Whether live discovery succeeded")
+    models: list[str] = Field(..., description="List of discovered or fallback model IDs")
+    count: int = Field(..., description="Total models available")
+    source: str = Field(..., description="'live_discovery' or 'fallback_config'")
+    base_url: str = Field(..., description="Gateway URL queried")
+    message: str = Field(..., description="Informational message or error summary")

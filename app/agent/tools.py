@@ -6,6 +6,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from app.core.config import get_settings
 from app.core.llm import ToolDefinition
 from app.core.logging import get_logger
 from app.indexer.embeddings import EmbeddingProvider, get_embedding_provider
@@ -14,7 +15,7 @@ from app.search.service import SearchService
 
 logger = get_logger("panopticon.agent.tools")
 
-MAX_TOOL_OUTPUT_CHARS = 2500
+MAX_TOOL_OUTPUT_CHARS = 4000
 
 @dataclass
 class AgentToolContext:
@@ -123,7 +124,23 @@ SEMANTIC_CHUNK_SEARCH_TOOL = ToolDefinition(
     },
 )
 
+GET_DOCUMENT_CATALOG_STATS_TOOL = ToolDefinition(
+    name="get_document_catalog_stats",
+    description=(
+        "Retrieve global statistics and inventory breakdown of all indexed documents in the repository. "
+        "Returns total file count, Docs vs Sheets count, project tags distribution, versions count, "
+        "chunk counts, and recent file activity. Use this tool whenever answering questions about "
+        "corpus size, document inventory, project tag overview, or how many files exist."
+    ),
+    parameters={
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+)
+
 PANOPTICON_TOOLS: list[ToolDefinition] = [
+    GET_DOCUMENT_CATALOG_STATS_TOOL,
     SEARCH_INDEX_TOOL,
     GET_DOCUMENT_DIFF_TOOL,
     GET_FILE_METADATA_TOOL,
@@ -140,8 +157,9 @@ def _handle_search_index(args: dict[str, Any], ctx: AgentToolContext) -> str:
     if not query:
         return json.dumps({"error": "Missing required argument 'query'."})
 
+    settings = get_settings()
     project_tag = args.get("project_tag")
-    limit = min(int(args.get("limit", 5)), 10)
+    limit = min(int(args.get("limit", settings.AGENT_DEFAULT_SEARCH_LIMIT)), settings.AGENT_MAX_SEARCH_LIMIT)
 
     # 1. Try Meilisearch search_service if configured
     if ctx.search_service:
@@ -217,10 +235,11 @@ def _handle_get_document_diff(args: dict[str, Any], ctx: AgentToolContext) -> st
             "message": f"Version {version_id} not found for this document.",
         })
 
+    settings = get_settings()
     serialized = []
     for d in target_diffs[:3]:
-        # Truncate patch text if too long
-        patch_snippet = d.patch_text[:1200] if d.patch_text else None
+        # Truncate patch text if too long using settings budget
+        patch_snippet = d.patch_text[:settings.AGENT_DIFF_SNIPPET_CHARS] if d.patch_text else None
         serialized.append({
             "diff_id": d.id,
             "from_version_id": d.from_version_id,
@@ -268,7 +287,8 @@ def _handle_semantic_chunk_search(args: dict[str, Any], ctx: AgentToolContext) -
     if not query:
         return json.dumps({"error": "Missing required argument 'query'."})
 
-    limit = min(int(args.get("limit", 3)), 5)
+    settings = get_settings()
+    limit = min(int(args.get("limit", 3)), settings.AGENT_MAX_CHUNKS_LIMIT)
     file_id = args.get("file_id")
 
     provider = ctx.embedding_provider or get_embedding_provider()
@@ -287,7 +307,7 @@ def _handle_semantic_chunk_search(args: dict[str, Any], ctx: AgentToolContext) -
             "file_id": chunk.file_id,
             "section_heading": chunk.section_heading,
             "similarity_score": round(similarity, 3),
-            "text": chunk.content_text[:800],
+            "text": chunk.content_text[:settings.AGENT_CHUNK_SNIPPET_CHARS],
         })
 
     return json.dumps({
@@ -297,11 +317,20 @@ def _handle_semantic_chunk_search(args: dict[str, Any], ctx: AgentToolContext) -
     })
 
 
+def _handle_get_document_catalog_stats(args: dict[str, Any], ctx: AgentToolContext) -> str:
+    stats = ctx.storage.get_catalog_stats()
+    return json.dumps({
+        "status": "success",
+        "inventory": stats,
+    })
+
+
 # ------------------------------------------------------------------------------
 # Dispatcher
 # ------------------------------------------------------------------------------
 
 _TOOL_DISPATCH_TABLE = {
+    "get_document_catalog_stats": _handle_get_document_catalog_stats,
     "search_index": _handle_search_index,
     "get_document_diff": _handle_get_document_diff,
     "get_file_metadata": _handle_get_file_metadata,
@@ -324,8 +353,10 @@ def execute_tool(name: str, arguments: dict[str, Any], context: AgentToolContext
         logger.error("Error executing tool '%s': %s", name, exc, exc_info=True)
         return json.dumps({"error": f"Tool execution failed: {exc}"})
 
-    if len(raw_output) > MAX_TOOL_OUTPUT_CHARS:
-        logger.debug("Truncating tool output for '%s' from %d to %d chars", name, len(raw_output), MAX_TOOL_OUTPUT_CHARS)
-        return raw_output[:MAX_TOOL_OUTPUT_CHARS] + '... [output truncated for context limit]"}'
+    settings = get_settings()
+    max_chars = settings.AGENT_MAX_TOOL_OUTPUT_CHARS
+    if len(raw_output) > max_chars:
+        logger.debug("Truncating tool output for '%s' from %d to %d chars", name, len(raw_output), max_chars)
+        return raw_output[:max_chars] + '... [output truncated for context limit]"}'
 
     return raw_output

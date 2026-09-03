@@ -10,6 +10,7 @@ from typing import Any, Iterator
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.agent.tools import PANOPTICON_TOOLS, AgentToolContext, execute_tool
+from app.core.config import get_settings
 from app.core.llm import LLMClient, LLMMessage, get_llm_client
 from app.core.logging import get_logger
 from app.indexer.embeddings import get_embedding_provider
@@ -24,6 +25,7 @@ PANOPTICON_SYSTEM_PROMPT = """You are Panopticon AI, an intelligent agentic assi
 CRITICAL OPERATIONAL RULES:
 1. GROUNDED FACTUALITY: You must NEVER invent or hallucinate document titles, version changes, owner emails, or URLs. Only state facts directly supported by the results of your tools.
 2. TOOL USAGE: When the user asks a question, use your tools to look up the real facts:
+   - Use `get_document_catalog_stats` when asked about total document counts, repository size, breakdown of Docs vs Sheets, or project tag overview.
    - Use `search_index` to find document IDs, titles, and owners.
    - Use `get_document_diff` when asked about changes, additions, deletions, or history.
    - Use `get_file_metadata` when asked about ownership, dates, or sharing status.
@@ -78,15 +80,16 @@ class AgenticReasoningEngine:
         self,
         llm_client: LLMClient | None = None,
         context: AgentToolContext | None = None,
-        max_steps: int = 5,
+        max_steps: int | None = None,
     ) -> None:
+        settings = get_settings()
         self.llm_client = llm_client or get_llm_client()
         self.context = context or AgentToolContext(
             storage=get_crawl_storage(),
             search_service=SearchService(),
             embedding_provider=get_embedding_provider(),
         )
-        self.max_steps = max_steps
+        self.max_steps = max_steps if max_steps is not None else settings.AGENT_MAX_REASONING_STEPS
 
     def run(
         self,
@@ -354,9 +357,10 @@ class AgenticReasoningEngine:
         # Stream the synthesized answer tokens
         words = re.split(r"(\s+)", sanitized_answer)
         chunk_buf: list[str] = []
+        batch_size = get_settings().LLM_STREAM_CHUNK_BATCH_SIZE
         for w in words:
             chunk_buf.append(w)
-            if len(chunk_buf) >= 4:
+            if len(chunk_buf) >= batch_size:
                 yield AgentStreamEvent(
                     event_type="token",
                     data={"delta": "".join(chunk_buf)},

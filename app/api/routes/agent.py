@@ -199,7 +199,6 @@ def query_agent(
     engine = AgenticReasoningEngine(
         llm_client=llm_client,
         context=tool_context,
-        max_steps=5,
     )
 
     history: list[AgentMessage] = []
@@ -320,7 +319,6 @@ async def stream_agent_query(
     engine = AgenticReasoningEngine(
         llm_client=llm_client,
         context=tool_context,
-        max_steps=5,
     )
 
     history: list[AgentMessage] = []

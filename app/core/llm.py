@@ -14,21 +14,16 @@ from app.core.logging import get_logger
 
 logger = get_logger("panopticon.core.llm")
 
-# Curated list of recommended models spanning speed, cost, and advanced reasoning
-RECOMMENDED_MODELS: list[str] = [
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "nvidia/nemotron-3-ultra",
-    "nvidia/nemotron-3.5-lightning:free",
-    "nvidia/llama-3.1-nemotron-70b-instruct",
-    "anthropic/claude-3.7-sonnet",
-    "anthropic/claude-3.5-sonnet",
-    "google/gemini-2.5-pro",
-    "google/gemini-2.0-flash",
-    "deepseek/deepseek-r1",
-    "deepseek/deepseek-chat",
-    "openai/gpt-4o",
-    "openai/o3-mini",
-]
+def get_recommended_models() -> list[str]:
+    """Return recommended models list loaded directly from the .env configuration."""
+    try:
+        return get_settings().default_models_list
+    except Exception:
+        return []
+
+
+# Dynamic reference to models configured in .env (zero hardcoded list in Python code)
+RECOMMENDED_MODELS: list[str] = get_recommended_models()
 
 
 def mask_api_key(key: str | None) -> str | None:
@@ -158,8 +153,8 @@ class LLMClient(Protocol):
         self,
         messages: list[LLMMessage],
         tools: list[ToolDefinition] | None = None,
-        temperature: float = 0.1,
-        max_tokens: int = 1500,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         """Execute a synchronous completion with optional tool definitions."""
         ...
@@ -196,12 +191,16 @@ class OpenRouterClient:
         self,
         messages: list[LLMMessage],
         tools: list[ToolDefinition] | None = None,
-        temperature: float = 0.1,
-        max_tokens: int = 1500,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> LLMResponse:
         """Execute completion request over HTTP with tool-calling schema serialization."""
         if not self._api_key:
             raise ValueError("OpenRouter API key is not configured.")
+
+        settings = get_settings()
+        effective_temp = temperature if temperature is not None else settings.LLM_TEMPERATURE
+        effective_max_tokens = max_tokens if max_tokens is not None else settings.LLM_MAX_OUTPUT_TOKENS
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",
@@ -213,8 +212,8 @@ class OpenRouterClient:
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": [m.to_openai_dict() for m in messages],
-            "temperature": temperature,
-            "max_tokens": max_tokens,
+            "temperature": effective_temp,
+            "max_tokens": effective_max_tokens,
         }
 
         if tools:
@@ -233,7 +232,25 @@ class OpenRouterClient:
                 headers=headers,
                 json=payload,
             )
-            response.raise_for_status()
+            if response.status_code >= 400:
+                err_msg = f"HTTP {response.status_code}"
+                try:
+                    err_data = response.json()
+                    if isinstance(err_data, dict) and "error" in err_data:
+                        err_info = err_data["error"]
+                        if isinstance(err_info, dict):
+                            msg = err_info.get("message")
+                            code = err_info.get("code")
+                            err_msg = f"[{code}] {msg}" if code else str(msg or err_info)
+                        else:
+                            err_msg = str(err_info)
+                    elif isinstance(err_data, dict) and "message" in err_data:
+                        err_msg = str(err_data["message"])
+                except Exception:
+                    if response.text:
+                        err_msg = response.text[:300]
+                raise LLMAPIError(f"LLM Provider Error [{response.status_code}]: {err_msg}")
+
             data = response.json()
 
         latency_ms = (time.perf_counter() - start_time) * 1000.0
@@ -426,3 +443,69 @@ def get_llm_client(settings: Settings | None = None) -> LLMClient:
         model=model,
         base_url=base_url,
     )
+
+
+def fetch_remote_models(
+    base_url: str | None = None,
+    api_key: str | None = None,
+    timeout_seconds: float | None = None,
+) -> tuple[bool, list[str], str]:
+    """Query an OpenAI-compatible /models endpoint to discover available models dynamically.
+
+    Works seamlessly with OpenRouter, OpenAI, Groq, Ollama, LM Studio, and vLLM.
+    Returns:
+        (success: bool, models: list[str], message: str)
+    """
+    settings = get_settings()
+    cfg = get_runtime_llm_config()
+
+    target_base_url = (base_url or cfg.get("base_url") or settings.OPENROUTER_BASE_URL).rstrip("/")
+    target_api_key = api_key if api_key is not None else (cfg.get("api_key") or settings.OPENROUTER_API_KEY)
+    timeout = timeout_seconds or settings.LLM_MODEL_DISCOVERY_TIMEOUT_SECONDS
+
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com/Mubashar986/Panopticon",
+        "X-Title": "Panopticon Model Discovery",
+    }
+    if target_api_key and target_api_key.strip():
+        headers["Authorization"] = f"Bearer {target_api_key.strip()}"
+
+    models_url = f"{target_base_url}/models"
+    try:
+        with httpx.Client(timeout=timeout) as client:
+            resp = client.get(models_url, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+
+        # Standard OpenAI models wire format: {"data": [{"id": "model_id", ...}]}
+        raw_list = data.get("data") if isinstance(data, dict) else (data if isinstance(data, list) else None)
+        if not raw_list or not isinstance(raw_list, list):
+            return (
+                False,
+                get_recommended_models(),
+                f"Unexpected response format from {models_url}: expected 'data' list.",
+            )
+
+        discovered: list[str] = []
+        for item in raw_list:
+            if isinstance(item, dict) and "id" in item:
+                discovered.append(str(item["id"]))
+            elif isinstance(item, str):
+                discovered.append(item)
+
+        if not discovered:
+            return (
+                False,
+                get_recommended_models(),
+                f"No model IDs discovered from {models_url}.",
+            )
+
+        return (True, discovered, f"Successfully discovered {len(discovered)} models from {target_base_url}.")
+    except Exception as exc:
+        logger.warning("Failed to fetch remote models from %s: %s", models_url, exc)
+        return (
+            False,
+            get_recommended_models(),
+            f"Could not connect to {models_url}: {exc}",
+        )

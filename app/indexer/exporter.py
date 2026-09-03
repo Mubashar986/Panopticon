@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.auth.base import DriveAuthProvider
 from app.core.auth.client import build_drive_service
+from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.indexer.models import (
     GOOGLE_DOC_MIME_TYPE,
@@ -52,24 +53,29 @@ class ContentExporter:
         self,
         service: Resource | None = None,
         provider: DriveAuthProvider | None = None,
-        max_snippet_chars: int = DEFAULT_MAX_SNIPPET_CHARS,
-        max_export_bytes: int = DEFAULT_MAX_EXPORT_BYTES,
+        max_snippet_chars: int | None = None,
+        max_export_bytes: int | None = None,
     ) -> None:
         """Initialize ContentExporter with injected Google Drive Resource or AuthProvider.
 
         Args:
             service: Optional pre-built Google Drive v3 Resource.
             provider: Optional DriveAuthProvider instance.
-            max_snippet_chars: Maximum character length of generated preview snippets (default 500).
-            max_export_bytes: Maximum allowed byte size before tripping circuit breaker (default 10MB).
+            max_snippet_chars: Maximum character length of generated preview snippets (default 500 or settings).
+            max_export_bytes: Maximum allowed byte size before tripping circuit breaker (default 10MB or settings).
         """
         if service is not None:
             self._service = service
         else:
             self._service = build_drive_service(provider)
 
-        self.max_snippet_chars = max_snippet_chars
-        self.max_export_bytes = max_export_bytes
+        settings = get_settings()
+        self.max_snippet_chars = (
+            max_snippet_chars if max_snippet_chars is not None else settings.EXPORT_MAX_SNIPPET_CHARS
+        )
+        self.max_export_bytes = (
+            max_export_bytes if max_export_bytes is not None else settings.EXPORT_MAX_BYTES
+        )
 
     @property
     def service(self) -> Resource:

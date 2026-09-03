@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, KeyboardEvent } from 'react';
+import { getApiUrl } from '../../config/api';
 
 interface ChatInputBarProps {
   onSend: (text: string) => void;
@@ -9,13 +10,43 @@ interface ChatInputBarProps {
   onModelChange: (model: string | null) => void;
 }
 
-const AVAILABLE_MODELS = [
-  { id: '', label: 'Default (Fast Reasoning)' },
-  { id: 'minimax/minimax-m3:free', label: 'MiniMax M3 (Free)' },
-  { id: 'nvidia/nemotron-3-ultra-550b-a55b:free', label: 'Nvidia Nemotron 3 Ultra free' },
-  { id: 'deepseek/deepseek-chat', label: 'DeepSeek Chat' },
-  { id: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro' },
-];
+interface ModelOption {
+  id: string;
+  label: string;
+}
+
+const KNOWN_LABELS: Record<string, string> = {
+  'openrouter/free': 'OpenRouter Auto Free Router',
+  'minimax/minimax-m3:free': 'MiniMax M3 (1.05M)',
+  'nvidia/nemotron-3-ultra:free': 'Nemotron 3 Ultra (1M)',
+  'poolside/laguna-s-2.1:free': 'Laguna S 2.1 (262K)',
+  'nvidia/nemotron-3.5-lightning:free': 'Nemotron 3.5 Lightning (1M)',
+  'inclusionai/ling-3.0-flash-fin:free': 'Ling 3.0 Flash Fin (262K)',
+  'minimax/minimax-m2.7:free': 'MiniMax M2.7 (197K)',
+  'nvidia/nemotron-3-super:free': 'Nemotron 3 Super (262K)',
+  'thinkingmachines/inkling:free': 'Inkling (1.05M)',
+  'dots-studio/dots3-note-preview:free': 'Dots3-Note Preview (512K)',
+  'poolside/laguna-xs-2.1:free': 'Laguna XS 2.1 (262K)',
+  'cohere/north-mini-code:free': 'North Mini Code (256K)',
+  'thinkingmachines/inkling-small:free': 'Inkling Small (1.05M)',
+  'nvidia/nemotron-3-nano-omni:free': 'Nemotron 3 Nano Omni (256K)',
+  'z-ai/glm-5.2:free': 'GLM 5.2 (256K)',
+  'liquid/lfm2.5-2.6b:free': 'LFM2.5-2.6B (66K)',
+};
+
+function formatModelLabel(slug: string): string {
+  if (KNOWN_LABELS[slug]) {
+    return `${KNOWN_LABELS[slug]} (Free)`;
+  }
+  const clean = slug.split('/').pop() || slug;
+  const isFree = clean.endsWith(':free');
+  const base = clean.replace(':free', '');
+  const title = base
+    .split(/[-_]/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+  return isFree ? `${title} (Free)` : title;
+}
 
 export function ChatInputBar({
   onSend,
@@ -26,7 +57,42 @@ export function ChatInputBar({
   onModelChange,
 }: ChatInputBarProps) {
   const [input, setInput] = useState('');
+  const [models, setModels] = useState<ModelOption[]>([
+    { id: '', label: 'Default (Fast Reasoning)' },
+  ]);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Dynamically fetch models configured in backend .env
+  useEffect(() => {
+    let isMounted = true;
+    async function loadModels() {
+      try {
+        const response = await fetch(getApiUrl('/api/settings/llm'));
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data.recommended_models) && data.recommended_models.length > 0) {
+            const activeModelLabel = data.model ? formatModelLabel(data.model) : 'Fast Reasoning';
+            const dynamicOptions: ModelOption[] = [
+              { id: '', label: `Default (${activeModelLabel})` },
+              ...data.recommended_models.map((m: string) => ({
+                id: m,
+                label: formatModelLabel(m),
+              })),
+            ];
+            if (isMounted) {
+              setModels(dynamicOptions);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic models from backend, using default option:', err);
+      }
+    }
+    loadModels();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Auto-resize textarea height
   useEffect(() => {
@@ -65,7 +131,7 @@ export function ChatInputBar({
             disabled={isStreaming}
             className="bg-[var(--color-bg-surface-elevated)] border border-[var(--color-border)] rounded-[var(--radius-sm)] px-1.5 py-0.5 text-[11px] text-[var(--color-text-primary)] focus:outline-none focus:border-[var(--color-primary)] cursor-pointer disabled:opacity-50"
           >
-            {AVAILABLE_MODELS.map((m) => (
+            {models.map((m) => (
               <option key={m.id} value={m.id} className="bg-[var(--color-bg-surface)]">
                 {m.label}
               </option>

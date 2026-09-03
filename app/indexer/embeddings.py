@@ -169,11 +169,12 @@ def get_embedding_provider(settings: Settings | None = None) -> EmbeddingProvide
     cfg = settings if settings is not None else get_settings()
 
     if cfg.OPENROUTER_API_KEY and cfg.OPENROUTER_API_KEY.strip():
-        logger.info("Initializing OpenRouterEmbeddingProvider (model=text-embedding-3-small)")
+        logger.info("Initializing OpenRouterEmbeddingProvider (model=%s, dim=%d)", cfg.EMBEDDING_MODEL, cfg.EMBEDDING_DIMENSION)
         return OpenRouterEmbeddingProvider(
             api_key=cfg.OPENROUTER_API_KEY,
-            model="text-embedding-3-small",
+            model=cfg.EMBEDDING_MODEL,
             base_url=cfg.OPENROUTER_BASE_URL,
+            dimension=cfg.EMBEDDING_DIMENSION,
         )
 
     logger.debug("OPENROUTER_API_KEY is unset; using local DeterministicHashEmbeddingProvider.")

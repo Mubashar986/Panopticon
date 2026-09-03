@@ -1,18 +1,21 @@
-"""FastAPI router for LLM runtime settings and connectivity testing."""
+"""FastAPI router for LLM runtime settings, dynamic model discovery, and connectivity testing."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from app.api.schemas.llm import (
+    LLMModelsDiscoveryResponse,
     LLMSettingsResponse,
     LLMSettingsUpdateRequest,
     LLMTestConnectionRequest,
     LLMTestConnectionResponse,
 )
+from app.core.config import get_settings
 from app.core.llm import (
-    RECOMMENDED_MODELS,
     OpenRouterClient,
+    fetch_remote_models,
+    get_recommended_models,
     get_runtime_llm_config,
     mask_api_key,
     set_runtime_llm_config,
@@ -26,7 +29,7 @@ router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 @router.get("/llm", response_model=LLMSettingsResponse)
 def get_llm_settings() -> LLMSettingsResponse:
-    """Retrieve currently active LLM settings with masked API key."""
+    """Retrieve currently active LLM settings with masked API key and dynamic models list."""
     cfg = get_runtime_llm_config()
     raw_key = cfg.get("api_key")
     return LLMSettingsResponse(
@@ -34,7 +37,7 @@ def get_llm_settings() -> LLMSettingsResponse:
         base_url=cfg["base_url"],
         has_api_key=bool(raw_key and raw_key.strip()),
         masked_api_key=mask_api_key(raw_key),
-        recommended_models=RECOMMENDED_MODELS,
+        recommended_models=get_recommended_models(),
     )
 
 
@@ -53,7 +56,33 @@ def update_llm_settings(payload: LLMSettingsUpdateRequest) -> LLMSettingsRespons
         base_url=cfg["base_url"],
         has_api_key=bool(raw_key and raw_key.strip()),
         masked_api_key=mask_api_key(raw_key),
-        recommended_models=RECOMMENDED_MODELS,
+        recommended_models=get_recommended_models(),
+    )
+
+
+@router.get("/llm/models", response_model=LLMModelsDiscoveryResponse)
+def discover_llm_models(
+    base_url: str | None = Query(default=None, description="Optional custom gateway base URL to probe"),
+    api_key: str | None = Query(default=None, description="Optional custom API key to use for probe"),
+) -> LLMModelsDiscoveryResponse:
+    """Dynamically discover available models from the target provider/gateway (/models endpoint).
+
+    Supports OpenRouter, OpenAI, Groq, local Ollama (http://localhost:11434/v1), LM Studio, and vLLM.
+    """
+    settings = get_settings()
+    cfg = get_runtime_llm_config()
+    target_base = (base_url or cfg.get("base_url") or settings.OPENROUTER_BASE_URL).rstrip("/")
+
+    success, models, message = fetch_remote_models(base_url=base_url, api_key=api_key)
+    source = "live_discovery" if success else "fallback_config"
+
+    return LLMModelsDiscoveryResponse(
+        success=success,
+        models=models,
+        count=len(models),
+        source=source,
+        base_url=target_base,
+        message=message,
     )
 
 
