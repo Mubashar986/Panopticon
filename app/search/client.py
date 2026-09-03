@@ -206,16 +206,36 @@ class PanopticonSearchClient:
             if api_err.status_code == 404:
                 raise IndexNotFoundError(f"Index '{uid}' not found") from api_err
             raise SearchError(f"Error fetching stats for index '{uid}': {api_err.message}") from api_err
+    def enable_vector_store(self) -> bool:
+        """Enable experimental vector store feature on Meilisearch (v1.3 - v1.12)."""
+        from app.search.schema import enable_vector_store
+
+        return enable_vector_store(self)
+
     def configure_schema(
         self,
         index_uid: str | None = None,
         settings_dict: dict[str, Any] | None = None,
+        dimension: int | None = None,
     ) -> dict[str, Any]:
-        """Configure and apply schema, ranking rules, and facets to the index."""
+        """Configure and apply schema, ranking rules, facets, and optional embedders to the index."""
         from app.search.schema import configure_index_schema
 
         uid = index_uid or self.index_name
-        return configure_index_schema(client=self, index_name=uid, settings_dict=settings_dict)
+        return configure_index_schema(
+            client=self, index_name=uid, settings_dict=settings_dict, dimension=dimension
+        )
+
+    def configure_chunk_schema(
+        self,
+        index_uid: str | None = None,
+        dimension: int = 128,
+    ) -> dict[str, Any]:
+        """Configure schema, attributes, and userProvided embedders for the chunk index."""
+        from app.search.schema import CHUNK_INDEX_NAME, configure_chunk_index_schema
+
+        uid = index_uid or CHUNK_INDEX_NAME
+        return configure_chunk_index_schema(client=self, index_name=uid, dimension=dimension)
 
     def get_schema_settings(self, index_uid: str | None = None) -> dict[str, Any]:
         """Fetch active settings for the index."""
@@ -254,6 +274,26 @@ class PanopticonSearchClient:
             offset=offset,
             index_name=index_name,
             custom_filter=custom_filter,
+        )
+
+    def search_chunks(
+        self,
+        query_vector: list[float],
+        limit: int = 3,
+        file_id: str | None = None,
+        query_text: str = "",
+        index_name: str | None = None,
+    ):
+        """Execute a sub-5ms vector search over paragraph chunks via SearchService."""
+        from app.search.service import SearchService
+
+        service = SearchService(search_client=self)
+        return service.search_chunks(
+            query_vector=query_vector,
+            limit=limit,
+            file_id=file_id,
+            query_text=query_text,
+            index_name=index_name or "panopticon_chunks",
         )
 
 

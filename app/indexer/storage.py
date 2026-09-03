@@ -933,6 +933,17 @@ class CrawlStorage:
             )
             return [self._row_to_chunk_model(row) for row in cursor.fetchall()]
 
+    def get_all_chunks(self, limit: int | None = None) -> list[DocumentChunk]:
+        """Retrieve all semantic chunks stored across all documents."""
+        with self.get_connection() as conn:
+            query = "SELECT * FROM document_chunks ORDER BY created_at ASC"
+            params: tuple[Any, ...] = ()
+            if limit is not None:
+                query += " LIMIT ?"
+                params = (limit,)
+            cursor = conn.execute(query, params)
+            return [self._row_to_chunk_model(row) for row in cursor.fetchall()]
+
     def delete_chunks_for_file(self, file_id: str) -> int:
         """Delete all semantic chunks associated with a file ID."""
         with self.get_connection() as conn:

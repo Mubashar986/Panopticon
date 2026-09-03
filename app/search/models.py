@@ -39,7 +39,7 @@ class IndexStats(BaseModel):
 class SearchDocument(BaseModel):
     """Normalized document model indexed into Meilisearch for Panopticon search."""
 
-    model_config = ConfigDict(frozen=True, extra="ignore")
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="ignore")
 
     id: str = Field(..., description="Unique document ID (Google Drive file ID)")
     name: str = Field(..., description="Document or Sheet title")
@@ -89,9 +89,18 @@ class SearchDocument(BaseModel):
     size_bytes: int | None = Field(
         default=None, description="File size in bytes if available"
     )
+    vectors: dict[str, list[float]] | None = Field(
+        default=None,
+        alias="_vectors",
+        description="Pre-computed embeddings dictionary keyed by embedder name",
+    )
 
     @classmethod
-    def from_drive_metadata(cls, drive_file: DriveFileMetadata) -> SearchDocument:
+    def from_drive_metadata(
+        cls,
+        drive_file: DriveFileMetadata,
+        vector: list[float] | None = None,
+    ) -> SearchDocument:
         """Construct a SearchDocument instance from a crawled DriveFileMetadata entity."""
         if drive_file.mime_type == GOOGLE_DOC_MIME_TYPE:
             cat_type = "document"
@@ -111,6 +120,8 @@ class SearchDocument(BaseModel):
             else None
         )
 
+        vectors_dict = {"default": vector} if vector is not None else None
+
         return cls(
             id=drive_file.id,
             name=drive_file.name,
@@ -128,11 +139,45 @@ class SearchDocument(BaseModel):
             web_view_link=drive_file.web_view_link,
             icon_link=drive_file.icon_link,
             size_bytes=drive_file.size_bytes,
+            vectors=vectors_dict,
         )
 
     def to_meili_dict(self) -> dict[str, Any]:
         """Serialize document to JSON-compatible dictionary for Meilisearch ingestion."""
-        return self.model_dump()
+        d = self.model_dump(by_alias=True)
+        if not d.get("_vectors"):
+            d.pop("_vectors", None)
+        return d
+
+
+class ChunkSearchDocument(BaseModel):
+    """Normalized paragraph-level chunk indexed into Meilisearch for dense vector retrieval."""
+
+    model_config = ConfigDict(frozen=True, populate_by_name=True, extra="ignore")
+
+    id: str = Field(..., description="Unique chunk ID (e.g. chk_...)")
+    file_id: str = Field(..., description="Parent Google Drive file ID")
+    file_name: str = Field(default="", description="Parent document title")
+    version_id: str | None = Field(default=None, description="Associated document version ID")
+    chunk_index: int = Field(default=0, description="Sequential index within document")
+    section_heading: str | None = Field(default=None, description="Section heading anchor if present")
+    content_text: str = Field(..., description="Plain text content of the paragraph chunk")
+    char_start: int = Field(default=0, description="Character start offset in full text")
+    char_end: int = Field(default=0, description="Character end offset in full text")
+    word_count: int = Field(default=0, description="Word count of the chunk")
+    web_view_link: str | None = Field(default=None, description="Direct Google Drive link")
+    vectors: dict[str, list[float]] | None = Field(
+        default=None,
+        alias="_vectors",
+        description="Pre-computed embeddings dictionary keyed by embedder name",
+    )
+
+    def to_meili_dict(self) -> dict[str, Any]:
+        """Serialize chunk to JSON-compatible dictionary for Meilisearch."""
+        d = self.model_dump(by_alias=True)
+        if not d.get("_vectors"):
+            d.pop("_vectors", None)
+        return d
 
 
 class IngestionResult(BaseModel):
@@ -209,6 +254,7 @@ class SearchResult(BaseModel):
 
 
 __all__ = [
+    "ChunkSearchDocument",
     "ConfidenceLevel",
     "IndexStats",
     "IngestionResult",

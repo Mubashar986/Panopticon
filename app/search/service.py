@@ -101,6 +101,9 @@ class SearchService:
         offset: int = 0,
         index_name: str | None = None,
         custom_filter: str | None = None,
+        vector: list[float] | None = None,
+        hybrid: bool = False,
+        semantic_ratio: float = 0.5,
     ) -> SearchResult:
         """Execute a typo-tolerant search query against the Meilisearch index.
 
@@ -116,6 +119,9 @@ class SearchService:
             offset: Hit offset for pagination.
             index_name: Target index UID override.
             custom_filter: Raw Meilisearch filter expression string.
+            vector: Optional dense vector query for hybrid semantic retrieval.
+            hybrid: Whether to enforce hybrid vector search if vector is supplied.
+            semantic_ratio: Balance between BM25 (0.0) and vector similarity (1.0).
 
         Returns:
             SearchResult containing ordered SearchHit items and execution metrics.
@@ -152,6 +158,12 @@ class SearchService:
             search_params["filter"] = filter_expr
         if sort_param:
             search_params["sort"] = sort_param
+        if vector is not None:
+            search_params["vector"] = vector
+            search_params["hybrid"] = {
+                "embedder": "default",
+                "semanticRatio": semantic_ratio,
+            }
 
         try:
             index = self.client.ensure_index(target_uid, primary_key="id")
@@ -213,6 +225,53 @@ class SearchService:
             if "index_not_found" in err_str:
                 raise IndexNotFoundError(f"Index '{target_uid}' not found in Meilisearch") from exc
             raise SearchError(f"Search query failed: {exc}") from exc
+
+    def search_chunks(
+        self,
+        query_vector: list[float],
+        limit: int = 3,
+        file_id: str | None = None,
+        query_text: str = "",
+        index_name: str = "panopticon_chunks",
+    ) -> list[dict[str, Any]]:
+        """Query panopticon_chunks index with dense vector for sub-5ms paragraph retrieval.
+
+        Args:
+            query_vector: Dense embedding vector representing the search query.
+            limit: Maximum paragraph chunks to return.
+            file_id: Optional filter restricting search to a specific file.
+            query_text: Optional keyword string to run hybrid vector+keyword chunk search.
+            index_name: Target index UID (defaults to 'panopticon_chunks').
+
+        Returns:
+            list[dict[str, Any]]: List of matching chunk dictionaries.
+        """
+        search_params: dict[str, Any] = {
+            "limit": limit,
+            "vector": query_vector,
+            "hybrid": {
+                "embedder": "default",
+                "semanticRatio": 1.0 if not query_text.strip() else 0.8,
+            },
+        }
+
+        if file_id:
+            search_params["filter"] = f'file_id = "{file_id}"'
+
+        try:
+            index = self.client.ensure_index(index_name, primary_key="id")
+            raw_response = index.search(query_text, search_params)
+            hits = raw_response.get("hits", [])
+            return hits
+        except Exception as exc:
+            err_str = str(exc).lower()
+            if "connection refused" in err_str or "communicationerror" in type(exc).__name__.lower():
+                raise SearchConnectionError(
+                    f"Cannot connect to Meilisearch at {self.client.url}: {exc}"
+                ) from exc
+            if "index_not_found" in err_str:
+                raise IndexNotFoundError(f"Index '{index_name}' not found in Meilisearch") from exc
+            raise SearchError(f"Vector chunk search failed: {exc}") from exc
 
 
 def get_search_service(

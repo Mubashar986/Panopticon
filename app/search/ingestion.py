@@ -7,11 +7,12 @@ import time
 from collections.abc import Sequence
 from typing import Any
 
-from app.indexer.models import DriveFileMetadata
+from app.indexer.models import DocumentChunk, DriveFileMetadata
 from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.search.client import PanopticonSearchClient, get_search_client
 from app.search.exceptions import IndexConfigurationError, SearchConnectionError, SearchError
-from app.search.models import IngestionResult, SearchDocument
+from app.search.models import ChunkSearchDocument, IngestionResult, SearchDocument
+from app.search.schema import CHUNK_INDEX_NAME
 
 logger = logging.getLogger("panopticon.search.ingestion")
 
@@ -24,10 +25,12 @@ class SearchIngestionEngine:
         search_client: PanopticonSearchClient | None = None,
         storage: CrawlStorage | None = None,
         batch_size: int = 100,
+        embedding_provider: Any | None = None,
     ) -> None:
         self.search_client = search_client or get_search_client()
         self.storage = storage or get_crawl_storage()
         self.batch_size = max(1, batch_size)
+        self.embedding_provider = embedding_provider
 
     def _chunk_list(self, items: list[Any], chunk_size: int) -> list[list[Any]]:
         """Split a list into chunks of fixed size."""
@@ -148,6 +151,133 @@ class SearchIngestionEngine:
                 ) from exc
             raise SearchError(f"Error during document ingestion: {exc}") from exc
 
+    def ingest_chunks(
+        self,
+        chunks: Sequence[DocumentChunk | ChunkSearchDocument | dict[str, Any]],
+        index_name: str | None = None,
+        dimension: int | None = None,
+        wait_for_tasks: bool = True,
+    ) -> IngestionResult:
+        """Transform and batch-upsert paragraph chunks into the Meilisearch chunk index.
+
+        Args:
+            chunks: Sequence of DocumentChunk models, ChunkSearchDocument instances, or dicts.
+            index_name: Target index UID (defaults to CHUNK_INDEX_NAME).
+            dimension: Vector dimensionality (defaults to embedding provider dimension or 128).
+            wait_for_tasks: Whether to await completion of Meilisearch indexing tasks.
+
+        Returns:
+            IngestionResult with chunk count metrics.
+        """
+        start_time = time.perf_counter()
+        target_uid = index_name or CHUNK_INDEX_NAME
+
+        if not chunks:
+            logger.info("No chunks provided for ingestion into '%s'.", target_uid)
+            return IngestionResult(
+                indexed_count=0,
+                deleted_count=0,
+                total_stored=0,
+                batch_count=0,
+                duration_seconds=time.perf_counter() - start_time,
+            )
+
+        # 1. Determine vector dimension
+        effective_dim = dimension
+        if effective_dim is None and self.embedding_provider:
+            effective_dim = getattr(self.embedding_provider, "dimension", None)
+
+        serialized_chunks: list[dict[str, Any]] = []
+        for c in chunks:
+            if isinstance(c, DocumentChunk):
+                if effective_dim is None and c.embedding:
+                    effective_dim = len(c.embedding)
+                chunk_doc = ChunkSearchDocument(
+                    id=c.id,
+                    file_id=c.file_id,
+                    version_id=c.version_id,
+                    chunk_index=c.chunk_index,
+                    section_heading=c.section_heading,
+                    content_text=c.content_text,
+                    char_start=c.char_start,
+                    char_end=c.char_end,
+                    word_count=c.word_count,
+                    vectors={"default": c.embedding} if c.embedding else None,
+                )
+                serialized_chunks.append(chunk_doc.to_meili_dict())
+            elif isinstance(c, ChunkSearchDocument):
+                serialized_chunks.append(c.to_meili_dict())
+            elif isinstance(c, dict):
+                serialized_chunks.append(c)
+
+        dim_to_configure = effective_dim or 128
+
+        # 2. Configure schema and embedder on chunk index
+        self.search_client.configure_chunk_schema(target_uid, dimension=dim_to_configure)
+        index = self.search_client.ensure_index(target_uid, primary_key="id")
+        raw_client = self.search_client.raw_client
+
+        # 3. Batch chunking and upload
+        batch_chunks = self._chunk_list(serialized_chunks, self.batch_size)
+        task_uids: list[int] = []
+
+        logger.info(
+            "Uploading %d chunks to index '%s' in %d batches (batch_size=%d, dim=%d)...",
+            len(serialized_chunks),
+            target_uid,
+            len(batch_chunks),
+            self.batch_size,
+            dim_to_configure,
+        )
+
+        try:
+            for idx, batch in enumerate(batch_chunks, start=1):
+                task = index.add_documents(batch, primary_key="id")
+                task_uid = task.task_uid if hasattr(task, "task_uid") else task.get("taskUid")
+                if task_uid is not None:
+                    task_uids.append(task_uid)
+                logger.debug("Submitted chunk batch %d/%d (task_uid=%s)", idx, len(batch_chunks), task_uid)
+
+            if wait_for_tasks and task_uids:
+                for task_uid in task_uids:
+                    task_result = raw_client.wait_for_task(task_uid)
+                    status = (
+                        getattr(task_result, "status", None)
+                        or (task_result.get("status") if isinstance(task_result, dict) else None)
+                    )
+                    if status == "failed":
+                        error = (
+                            getattr(task_result, "error", None)
+                            or (task_result.get("error") if isinstance(task_result, dict) else "Unknown error")
+                        )
+                        raise IndexConfigurationError(f"Meilisearch chunk indexing task {task_uid} failed: {error}")
+
+            stats = self.search_client.get_stats(target_uid)
+            duration = time.perf_counter() - start_time
+
+            logger.info(
+                "Chunk ingestion complete: %d chunks indexed into '%s' in %.2fs (Total in index: %d).",
+                len(serialized_chunks),
+                target_uid,
+                duration,
+                stats.number_of_documents,
+            )
+
+            return IngestionResult(
+                indexed_count=len(serialized_chunks),
+                deleted_count=0,
+                total_stored=stats.number_of_documents,
+                batch_count=len(batch_chunks),
+                duration_seconds=round(duration, 3),
+            )
+        except (IndexConfigurationError, SearchConnectionError, SearchError):
+            raise
+        except Exception as exc:
+            err_str = str(exc).lower()
+            if "connection refused" in err_str or "communicationerror" in type(exc).__name__.lower():
+                raise SearchConnectionError(f"Cannot connect to Meilisearch at {self.search_client.url}: {exc}") from exc
+            raise SearchError(f"Error during chunk ingestion: {exc}") from exc
+
     def delete_documents_by_ids(
         self,
         file_ids: Sequence[str],
@@ -192,23 +322,28 @@ class SearchIngestionEngine:
         self,
         storage: CrawlStorage | None = None,
         index_name: str | None = None,
+        chunk_index_name: str | None = None,
+        sync_chunks: bool = True,
         full_refresh: bool = False,
         purge_deleted: bool = True,
     ) -> IngestionResult:
-        """Synchronize stored Google Drive files from SQLite into Meilisearch.
+        """Synchronize stored Google Drive files and paragraph chunks from SQLite into Meilisearch.
 
         Args:
             storage: Optional CrawlStorage instance. Defaults to self.storage.
-            index_name: Optional target index UID override.
+            index_name: Optional target index UID override for documents.
+            chunk_index_name: Optional target index UID override for chunks (defaults to 'panopticon_chunks').
+            sync_chunks: Whether to synchronize paragraph chunks into chunk index.
             full_refresh: Whether this is a full rebuild.
             purge_deleted: Whether to detect and remove deleted files from Meilisearch.
 
         Returns:
-            IngestionResult summarizing indexed and deleted counts.
+            IngestionResult summarizing indexed and deleted counts for documents.
         """
         start_time = time.perf_counter()
         active_storage = storage or self.storage
         target_uid = index_name or self.search_client.index_name
+        target_chunk_uid = chunk_index_name or CHUNK_INDEX_NAME
 
         # 1. Fetch all active files from local SQLite database
         all_stored_files = active_storage.list_files()
@@ -221,8 +356,19 @@ class SearchIngestionEngine:
             wait_for_tasks=True,
         )
 
+        # 3. Synchronize paragraph chunks if enabled
+        if sync_chunks:
+            all_chunks = active_storage.get_all_chunks()
+            if all_chunks:
+                logger.info("Synchronizing %d stored chunks to Meilisearch index '%s'...", len(all_chunks), target_chunk_uid)
+                self.ingest_chunks(
+                    chunks=all_chunks,
+                    index_name=target_chunk_uid,
+                    wait_for_tasks=True,
+                )
+
         deleted_count = 0
-        # 3. Ghost deletion detection (Product Constraint 10)
+        # 4. Ghost deletion detection (Product Constraint 10)
         if purge_deleted and active_file_ids:
             try:
                 # Retrieve currently indexed document IDs in Meilisearch

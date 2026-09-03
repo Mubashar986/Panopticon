@@ -294,6 +294,37 @@ def _handle_semantic_chunk_search(args: dict[str, Any], ctx: AgentToolContext) -
     provider = ctx.embedding_provider or get_embedding_provider()
     query_vector = provider.embed_query(query)
 
+    # 1. Try Meilisearch native vector index first (<3ms)
+    if ctx.search_service:
+        try:
+            hits = ctx.search_service.search_chunks(
+                query_vector=query_vector,
+                limit=limit,
+                file_id=file_id,
+                query_text=query,
+            )
+            if hits:
+                results = []
+                for h in hits:
+                    score = h.get("_rankingScore")
+                    score_float = round(float(score), 3) if score is not None else 1.0
+                    results.append({
+                        "chunk_id": h.get("id"),
+                        "file_id": h.get("file_id"),
+                        "section_heading": h.get("section_heading"),
+                        "similarity_score": score_float,
+                        "text": (h.get("content_text") or "")[:settings.AGENT_CHUNK_SNIPPET_CHARS],
+                    })
+                return json.dumps({
+                    "query": query,
+                    "engine": "meilisearch_vector",
+                    "chunks_count": len(results),
+                    "chunks": results,
+                })
+        except Exception as exc:
+            logger.warning("Meilisearch chunk vector search failed, falling back to SQLite: %s", exc)
+
+    # 2. Resilient fallback: SQLite in-memory cosine scan
     chunks = ctx.storage.search_similar_chunks(
         query_vector=query_vector,
         limit=limit,
@@ -312,6 +343,7 @@ def _handle_semantic_chunk_search(args: dict[str, Any], ctx: AgentToolContext) -
 
     return json.dumps({
         "query": query,
+        "engine": "sqlite_fallback",
         "chunks_count": len(results),
         "chunks": results,
     })
