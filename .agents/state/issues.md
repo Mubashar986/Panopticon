@@ -1,0 +1,81 @@
+# Issues and Error Register — Panopticon
+
+This is the central register for all non-trivial errors, failures, regressions, incidents, and unresolved technical issues encountered during Panopticon development.
+
+Use the template below when adding new issues:
+
+```markdown
+## ISSUE-XXXX — Short title
+
+Status: OPEN | INVESTIGATING | BLOCKED | FIXED_PENDING_VERIFICATION | RESOLVED | WONT_FIX
+Severity: LOW | MEDIUM | HIGH | CRITICAL
+Detected: YYYY-MM-DD
+Detected During: WBS task / stage
+Architectural Domain: (e.g. Indexer, Search, API, Dashboard, Auth, Infrastructure)
+Component: component/path
+Symptom:
+Reproduction:
+Evidence:
+Root Cause:
+Contributing Factors:
+Affected Scope:
+Regression Risk: LOW | MEDIUM | HIGH
+Related WBS:
+Related Artifacts:
+Fix:
+Verification:
+Regression Verification:
+Resolution:
+Remaining Risk:
+Resolved On: YYYY-MM-DD
+```
+
+## ISSUE-0001 — PowerShell multi-line string quote stripping in inline Python CLI execution
+
+Status: RESOLVED
+Severity: LOW
+Detected: 2026-08-30
+Detected During: Epic 7 Drop 1 verification
+Architectural Domain: Infrastructure / Tooling
+Component: verification command
+Symptom: Inline `python -c` script failed with `SyntaxError: unterminated string literal` on Windows PowerShell.
+Reproduction: `python -c "cursor.execute(\"SELECT ...\")"` in PowerShell.
+Evidence: PowerShell stripped escaped quotes before passing string to Python interpreter.
+Root Cause: PowerShell parsing treats backslash-quote `\"` differently than POSIX shells, resulting in quote stripping and broken syntax in multi-line inline commands.
+Contributing Factors: Using inline `-c` script instead of a clean standalone verification `.py` script.
+Affected Scope: CLI verification commands only. No application code or database affected.
+Regression Risk: LOW
+Related WBS: Epic 7 Drop 1
+Related Artifacts: `backend/migrations/0007_add_change_tracking.py`
+Fix: Use a dedicated Python verification script file instead of inline multi-line PowerShell string commands.
+Verification: Executed verification script via file execution.
+Regression Verification: All schema checks confirmed passing cleanly.
+Resolution: Resolved.
+Remaining Risk: None.
+Resolved On: 2026-08-30
+
+## ISSUE-0002 — Meilisearch rejection of null _vectors field during batch ingestion
+
+Status: RESOLVED
+Severity: MEDIUM
+Detected: 2026-09-03
+Detected During: Task 9.9 dual-index ingestion
+Architectural Domain: Search / Serialization
+Component: app/search/models.py (SearchDocument.to_meili_dict, ChunkSearchDocument.to_meili_dict)
+Symptom: Ingestion failed with Meilisearch task error: `Index panopticon_docs: invalid type: null, expected a map at line 1 column 4`.
+Reproduction: `python scripts/ingest_to_meilisearch.py` when documents have `vectors=None`.
+Evidence: Task failure returned by Meilisearch: `{'message': 'Index panopticon_docs: invalid type: null, expected a map at line 1 column 4', 'code': 'internal', 'type': 'internal'}`.
+Root Cause: In Pydantic model serialization, `vectors: dict | None = Field(default=None, alias="_vectors")` dumped as `{"_vectors": null}` when unassigned. Meilisearch v1.12 vector deserializer expects `_vectors` to be a valid JSON map/object (e.g. `{"default": [...]}`) and rejects `null` as invalid type.
+Contributing Factors: `to_meili_dict()` called `model_dump(by_alias=True)` without pruning `None` vectors.
+Affected Scope: `SearchDocument` and `ChunkSearchDocument` Meilisearch dictionary serialization.
+Regression Risk: LOW
+Related WBS: Task 9.9
+Related Artifacts: `app/search/models.py`
+Fix: In `to_meili_dict()`, strip `_vectors` if it is `None` or empty dictionary, ensuring Meilisearch only receives `_vectors` when valid vector embeddings are present.
+Verification: Re-ran `ingest_to_meilisearch.py`, successfully upserting 92 documents and 92 chunks with zero errors in 2.42s.
+Regression Verification: Serializing documents with and without vectors verified in `tests/test_hybrid_vector_search.py`.
+Resolution: Resolved.
+Remaining Risk: None.
+Resolved On: 2026-09-03
+
+

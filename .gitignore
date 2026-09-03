@@ -5,16 +5,9 @@
 # ------------------------------------------------------------------------------
 # AI Agent Instructions, Docs & Operating State
 # ------------------------------------------------------------------------------
-.agents/
-.agent/
+
 .dual-graph/
-doc.md
-AGENTS.md
-GEMINI.md
-docs/
-design-system/
-roadmap_wbs*.md
-architecture.md
+
 
 # ------------------------------------------------------------------------------
 # Google API Credentials, OAuth Tokens & Secrets (STRICT - NO COMMITS)
@@ -78,6 +71,7 @@ htmlcov/
 *.db
 data/
 crawl_cache/
+.dual-graph/
 
 # ------------------------------------------------------------------------------
 # Meilisearch Local Data & Binaries
