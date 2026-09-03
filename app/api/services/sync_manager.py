@@ -22,6 +22,7 @@ from app.api.services.event_bus import get_sync_event_bus
 from app.core.auth.factory import get_auth_provider
 from app.core.config import get_settings
 from app.indexer.crawler import DriveCrawler
+from app.indexer.embeddings import get_embedding_provider
 from app.indexer.exporter import ContentExporter
 from app.indexer.storage import CrawlStorage, get_crawl_storage
 from app.indexer.sync import IncrementalSyncEngine
@@ -282,6 +283,7 @@ class SyncManager:
                     search_client=search_client,
                     storage=storage,
                     batch_size=100,
+                    embedding_provider=get_embedding_provider(),
                 )
                 ingest_res = ingestion_engine.sync_from_storage(purge_deleted=True)
                 total_indexed = ingest_res.total_stored
@@ -367,6 +369,7 @@ class SyncManager:
                 search_client=search_client,
                 storage=storage,
                 batch_size=100,
+                embedding_provider=get_embedding_provider(),
             )
             ingest_res = ingestion_engine.sync_from_storage(purge_deleted=True)
 
