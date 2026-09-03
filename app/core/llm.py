@@ -232,8 +232,9 @@ class OpenRouterClient:
                 headers=headers,
                 json=payload,
             )
-            if response.status_code >= 400:
-                err_msg = f"HTTP {response.status_code}"
+            status_code = getattr(response, "status_code", 200)
+            if isinstance(status_code, int) and status_code >= 400:
+                err_msg = f"HTTP {status_code}"
                 try:
                     err_data = response.json()
                     if isinstance(err_data, dict) and "error" in err_data:
@@ -247,9 +248,9 @@ class OpenRouterClient:
                     elif isinstance(err_data, dict) and "message" in err_data:
                         err_msg = str(err_data["message"])
                 except Exception:
-                    if response.text:
+                    if hasattr(response, "text") and response.text:
                         err_msg = response.text[:300]
-                raise LLMAPIError(f"LLM Provider Error [{response.status_code}]: {err_msg}")
+                raise LLMAPIError(f"LLM Provider Error [{status_code}]: {err_msg}")
 
             data = response.json()
 
