@@ -29,6 +29,9 @@ class AgentQueryRequest(BaseModel):
     user_instructions: str | None = Field(
         default=None, description="Optional custom guidelines (e.g. 'Format in markdown table')"
     )
+    dossier_id: str | None = Field(
+        default=None, description="Optional Project Dossier ID to scope agent reasoning and tool calls"
+    )
 
 
 class AgentThreadItem(BaseModel):
@@ -127,3 +130,4 @@ class AgentQueryResponse(BaseModel):
     )
     model: str = Field(..., description="Model ID that generated the answer")
     latency_ms: float = Field(..., description="Execution duration in milliseconds")
+    dossier_id: str | None = Field(default=None, description="Optional Project Dossier ID container used for scoping")

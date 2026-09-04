@@ -30,6 +30,8 @@ class SearchService:
         project_tag: str | None = None,
         primary_owner: str | None = None,
         custom_filter: str | None = None,
+        allowed_file_ids: list[str] | set[str] | None = None,
+        id_field: str = "id",
     ) -> str | None:
         """Construct a Meilisearch filter string from facet criteria."""
         clauses: list[str] = []
@@ -44,6 +46,9 @@ class SearchService:
             clauses.append(f'project_tags = "{project_tag}"')
         if primary_owner:
             clauses.append(f'primary_owner = "{primary_owner}"')
+        if allowed_file_ids:
+            ids_str = ", ".join(f'"{fid}"' for fid in sorted(allowed_file_ids))
+            clauses.append(f'{id_field} IN [{ids_str}]')
         if custom_filter:
             clauses.append(f"({custom_filter})")
 
@@ -104,6 +109,7 @@ class SearchService:
         vector: list[float] | None = None,
         hybrid: bool = False,
         semantic_ratio: float = 0.5,
+        allowed_file_ids: list[str] | set[str] | None = None,
     ) -> SearchResult:
         """Execute a typo-tolerant search query against the Meilisearch index.
 
@@ -122,10 +128,23 @@ class SearchService:
             vector: Optional dense vector query for hybrid semantic retrieval.
             hybrid: Whether to enforce hybrid vector search if vector is supplied.
             semantic_ratio: Balance between BM25 (0.0) and vector similarity (1.0).
+            allowed_file_ids: Optional set of file IDs to restrict search (Dossier scoping).
 
         Returns:
             SearchResult containing ordered SearchHit items and execution metrics.
         """
+        # Fast early exit if dossier is empty
+        if allowed_file_ids is not None and len(allowed_file_ids) == 0:
+            return SearchResult(
+                query=query,
+                hits=[],
+                total_hits=0,
+                processing_time_ms=0.0,
+                limit=limit,
+                offset=offset,
+                facet_distribution={},
+            )
+
         target_uid = index_name or self.client.index_name
         filter_expr = self._build_filter_expression(
             file_type=file_type,
@@ -134,6 +153,8 @@ class SearchService:
             project_tag=project_tag,
             primary_owner=primary_owner,
             custom_filter=custom_filter,
+            allowed_file_ids=allowed_file_ids,
+            id_field="id",
         )
 
         # Normalize sort parameter
@@ -233,6 +254,7 @@ class SearchService:
         file_id: str | None = None,
         query_text: str = "",
         index_name: str = "panopticon_chunks",
+        allowed_file_ids: list[str] | set[str] | None = None,
     ) -> list[dict[str, Any]]:
         """Query panopticon_chunks index with dense vector for sub-5ms paragraph retrieval.
 
@@ -242,10 +264,15 @@ class SearchService:
             file_id: Optional filter restricting search to a specific file.
             query_text: Optional keyword string to run hybrid vector+keyword chunk search.
             index_name: Target index UID (defaults to 'panopticon_chunks').
+            allowed_file_ids: Optional set of file IDs to restrict vector search (Dossier scoping).
 
         Returns:
             list[dict[str, Any]]: List of matching chunk dictionaries.
         """
+        # Fast early exit if dossier is empty
+        if allowed_file_ids is not None and len(allowed_file_ids) == 0:
+            return []
+
         search_params: dict[str, Any] = {
             "limit": limit,
             "vector": query_vector,
@@ -255,8 +282,15 @@ class SearchService:
             },
         }
 
+        filter_clauses: list[str] = []
         if file_id:
-            search_params["filter"] = f'file_id = "{file_id}"'
+            filter_clauses.append(f'file_id = "{file_id}"')
+        if allowed_file_ids:
+            ids_str = ", ".join(f'"{fid}"' for fid in sorted(allowed_file_ids))
+            filter_clauses.append(f'file_id IN [{ids_str}]')
+
+        if filter_clauses:
+            search_params["filter"] = " AND ".join(filter_clauses)
 
         try:
             index = self.client.ensure_index(index_name, primary_key="id")

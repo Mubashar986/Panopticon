@@ -96,6 +96,7 @@ class AgenticReasoningEngine:
         query: str,
         user_instructions: str | None = None,
         history: list[AgentMessage] | None = None,
+        dossier_id: str | None = None,
     ) -> AgentRunResult:
         """Execute the ReAct loop to answer user query autonomously."""
         start_time = time.perf_counter()
@@ -110,7 +111,34 @@ class AgenticReasoningEngine:
                 latency_ms=0.0,
             )
 
+        # Scoped container resolution
+        allowed_file_ids: set[str] | None = None
+        dossier_name: str | None = None
+        if dossier_id:
+            dossier = self.context.storage.get_dossier(dossier_id)
+            if dossier:
+                dossier_name = dossier.name
+            dossier_files, _ = self.context.storage.list_dossier_items(dossier_id, limit=1000)
+            allowed_file_ids = {f.id for f in dossier_files}
+
+        run_context = AgentToolContext(
+            storage=self.context.storage,
+            search_service=self.context.search_service,
+            embedding_provider=self.context.embedding_provider,
+            dossier_id=dossier_id,
+            allowed_file_ids=allowed_file_ids,
+        )
+
         system_content = PANOPTICON_SYSTEM_PROMPT
+        if dossier_id:
+            target_name = dossier_name or dossier_id
+            system_content += (
+                f"\nPROJECT DOSSIER BOUNDARY ACTIVE: You are operating strictly inside the boundary of "
+                f"Project Dossier '{target_name}' (ID: {dossier_id}). "
+                f"You MUST pass dossier_id='{dossier_id}' to any tool calls you make. "
+                f"You are strictly prohibited from inspecting or referencing documents outside this container. "
+                f"If the container has no documents, report that to the user honestly."
+            )
         if user_instructions:
             system_content += f"\nADDITIONAL USER INSTRUCTIONS:\n{user_instructions.strip()}"
 
@@ -163,7 +191,11 @@ class AgenticReasoningEngine:
                     tools_used.append(tc.name)
                     logger.info("Agent invoking tool '%s' with args: %s", tc.name, tc.arguments)
 
-                    tool_output = execute_tool(tc.name, tc.arguments, self.context)
+                    # Ensure dossier_id is enforced in tool arguments
+                    if dossier_id and "dossier_id" not in tc.arguments:
+                        tc.arguments["dossier_id"] = dossier_id
+
+                    tool_output = execute_tool(tc.name, tc.arguments, run_context)
                     preview = tool_output[:300] + "..." if len(tool_output) > 300 else tool_output
 
                     trace.append(
@@ -223,6 +255,7 @@ class AgenticReasoningEngine:
         query: str,
         user_instructions: str | None = None,
         history: list[AgentMessage] | None = None,
+        dossier_id: str | None = None,
     ) -> Iterator[AgentStreamEvent]:
         """Execute the ReAct loop yielding real-time SSE stream events."""
         start_time = time.perf_counter()
@@ -234,7 +267,34 @@ class AgenticReasoningEngine:
             )
             return
 
+        # Scoped container resolution
+        allowed_file_ids: set[str] | None = None
+        dossier_name: str | None = None
+        if dossier_id:
+            dossier = self.context.storage.get_dossier(dossier_id)
+            if dossier:
+                dossier_name = dossier.name
+            dossier_files, _ = self.context.storage.list_dossier_items(dossier_id, limit=1000)
+            allowed_file_ids = {f.id for f in dossier_files}
+
+        run_context = AgentToolContext(
+            storage=self.context.storage,
+            search_service=self.context.search_service,
+            embedding_provider=self.context.embedding_provider,
+            dossier_id=dossier_id,
+            allowed_file_ids=allowed_file_ids,
+        )
+
         system_content = PANOPTICON_SYSTEM_PROMPT
+        if dossier_id:
+            target_name = dossier_name or dossier_id
+            system_content += (
+                f"\nPROJECT DOSSIER BOUNDARY ACTIVE: You are operating strictly inside the boundary of "
+                f"Project Dossier '{target_name}' (ID: {dossier_id}). "
+                f"You MUST pass dossier_id='{dossier_id}' to any tool calls you make. "
+                f"You are strictly prohibited from inspecting or referencing documents outside this container. "
+                f"If the container has no documents, report that to the user honestly."
+            )
         if user_instructions:
             system_content += f"\nADDITIONAL USER INSTRUCTIONS:\n{user_instructions.strip()}"
 
@@ -296,7 +356,11 @@ class AgenticReasoningEngine:
                         },
                     )
 
-                    tool_output = execute_tool(tc.name, tc.arguments, self.context)
+                    # Ensure dossier_id is enforced in tool arguments
+                    if dossier_id and "dossier_id" not in tc.arguments:
+                        tc.arguments["dossier_id"] = dossier_id
+
+                    tool_output = execute_tool(tc.name, tc.arguments, run_context)
                     preview = tool_output[:300] + "..." if len(tool_output) > 300 else tool_output
 
                     trace.append(

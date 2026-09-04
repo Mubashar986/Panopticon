@@ -1,9 +1,7 @@
 # Current Stage State
 
 **Current Stage:** Stage 4: Testing & Verification (COMPLETED)
-**Active Skill:** `testing-verification`
-**Status:** VERIFIED & PASSING
-**Stage Gate:** Completed 100% static code inspection, type safety audit, relational constraint check, and test matrix generation in `task_10_1_testing.md`.
-**Track:** Python (FastAPI + SQLite WAL + Pydantic v2)
-
-Task 10.1 is fully verified and ready for local git commit. Ready for Task 10.2!
+**Active Skill:** testing-verification
+**Status:** COMPLETED
+**Stage Gate:** Stage 4 verification complete. Verified scoped SearchService filter expressions, hardened AgentToolContext and all 5 tool handlers with dossier isolation boundaries, updated AgenticReasoningEngine container system prompts, wired FastAPI endpoints with 404 validation, and verified tests in tests/test_agent_scoped_dossier.py.
+**Track:** Python (Agentic RAG + Meilisearch Scoping + FastEmbed + FastAPI)

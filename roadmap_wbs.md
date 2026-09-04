@@ -574,8 +574,8 @@ graph TD
 | **9.8** | **Done** | None | `escher` / `vermeer` | **Completed:** Multi-Turn Chat Sessions, SQLite Thread Persistence & UI Drawer History (RFC-0002) (245/245 tests pass + frontend built) |
 | **9.9** | **Done** | None | `concept-to-code-bridge` | **Completed:** Full-Corpus Deep Chunk Ingestion & Native Meilisearch Hybrid Vector Indexing (Dual-index, 92 files + 92 chunks, sub-20ms vector retrieval, zero errors) |
 | **10.1** | **Done** | None | `concept-to-code-bridge` | **Completed:** Project Dossiers Domain Model, Relational Schema & CRUD APIs (Storage + REST Endpoints + Test Suites) |
-| **10.2** | **Yes** | None | `concept-to-code-bridge` | **Project-Scoped RAG Rig & Tool Isolation ("Ask Dossier")** |
-| **10.3** | No | Needs 10.1 | `concept-to-code-bridge` | 1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam |
+| **10.2** | **Done** | None | `concept-to-code-bridge` | **Completed:** Project-Scoped RAG Rig & Tool Isolation ("Ask Dossier") (Scoped tool execution, empty fast exits, diff/metadata permission boundaries, and API validation) |
+| **10.3** | **Yes** | None | `concept-to-code-bridge` | **1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam** |
 | **10.4** | No | Needs 10.1, 10.2, 10.3 | `picasso` / `escher` / `vermeer` | Complete High-Rhythm Frontend Redesign |
 | **11.1** | No | Needs 10.1 | `concept-to-code-bridge` | Pluggable `SourceConnector` Protocol & Registry |
 | **11.2** | No | Needs 11.1 | `concept-to-code-bridge` | Universal Multi-Source Document Schema |
@@ -584,11 +584,11 @@ graph TD
 
 ## 11. Recommended Next Task
 
-**Start with:** **Task 10.2 — Project-Scoped RAG Rig & Tool Isolation ("Ask Dossier")**
+**Start with:** **Task 10.3 — 1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam**
 
-**Why:** With the `dossiers` relational container and membership models in place from Task 10.1, Task 10.2 upgrades the Agentic reasoning engine and all 5 tools (`search_index`, `get_document_diff`, `get_file_metadata`, `semantic_chunk_search`, `get_document_catalog_stats`) to accept an optional `dossier_id`, strictly scoping RAG lookups to the project container.
+**Why:** Now that Project Dossiers (10.1) and Project-Scoped RAG Tool Isolation (10.2) are fully implemented and verified, Task 10.3 implements the web-based OAuth 2.0 redirect flow and Google Workspace Domain-Wide Delegation (DWD) admin seam, enabling non-technical users to authenticate and index organization-wide documents seamlessly.
 
-**What happens next:** Run Stage 1 with `concept-to-code-bridge` for Task 10.2.
+**What happens next:** Run Stage 1 with `concept-to-code-bridge` for Task 10.3.
 
 ---
 

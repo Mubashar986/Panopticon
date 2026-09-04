@@ -1309,16 +1309,43 @@ class CrawlStorage:
             )
             return cursor.rowcount > 0
 
-    def get_catalog_stats(self) -> dict[str, Any]:
+    def get_catalog_stats(self, allowed_file_ids: list[str] | set[str] | None = None) -> dict[str, Any]:
         """Aggregate high-level corpus inventory statistics from SQLite tables.
+
+        Args:
+            allowed_file_ids: Optional set/list of file IDs to restrict inventory stats (Dossier scoping).
 
         Returns:
             dict containing file counts, type breakdown, versions, chunks, and tags.
         """
+        if allowed_file_ids is not None and len(allowed_file_ids) == 0:
+            return {
+                "total_files": 0,
+                "docs_count": 0,
+                "sheets_count": 0,
+                "other_count": 0,
+                "total_versions": 0,
+                "total_diffs": 0,
+                "total_chunks": 0,
+                "files_with_zero_chunks": 0,
+                "project_tags_distribution": {},
+                "sharing_status_distribution": {},
+                "recent_files": [],
+            }
+
         with self.get_connection() as conn:
+            scope_filter = ""
+            scope_params: list[Any] = []
+            id_list: list[str] = []
+            if allowed_file_ids is not None:
+                id_list = list(allowed_file_ids)
+                placeholders = ",".join("?" for _ in id_list)
+                scope_filter = f" AND id IN ({placeholders})"
+                scope_params = id_list
+
             # 1. File counts by MIME type (only non-trashed files)
             mime_cursor = conn.execute(
-                """
+                f"""
                 SELECT
                     COUNT(*) as total,
                     SUM(CASE WHEN mime_type = 'application/vnd.google-apps.document' THEN 1 ELSE 0 END) as docs_count,
@@ -1328,8 +1355,9 @@ class CrawlStorage:
                         'application/vnd.google-apps.spreadsheet'
                     ) THEN 1 ELSE 0 END) as other_count
                 FROM file_records
-                WHERE trashed = 0
-                """
+                WHERE trashed = 0{scope_filter}
+                """,
+                scope_params,
             )
             mime_row = mime_cursor.fetchone()
             total_files = int(mime_row["total"] or 0)
@@ -1338,29 +1366,54 @@ class CrawlStorage:
             other_count = int(mime_row["other_count"] or 0)
 
             # 2. Version and Diff counts
-            v_row = conn.execute("SELECT COUNT(*) as c FROM document_versions").fetchone()
+            if allowed_file_ids is not None:
+                v_placeholders = ",".join("?" for _ in id_list)
+                v_row = conn.execute(
+                    f"SELECT COUNT(*) as c FROM document_versions WHERE file_id IN ({v_placeholders})",
+                    id_list,
+                ).fetchone()
+                d_row = conn.execute(
+                    f"SELECT COUNT(*) as c FROM document_diffs WHERE file_id IN ({v_placeholders})",
+                    id_list,
+                ).fetchone()
+            else:
+                v_row = conn.execute("SELECT COUNT(*) as c FROM document_versions").fetchone()
+                d_row = conn.execute("SELECT COUNT(*) as c FROM document_diffs").fetchone()
             total_versions = int(v_row["c"] or 0)
-
-            d_row = conn.execute("SELECT COUNT(*) as c FROM document_diffs").fetchone()
             total_diffs = int(d_row["c"] or 0)
 
             # 3. Chunks count & files missing chunks
-            c_row = conn.execute("SELECT COUNT(*) as c FROM document_chunks").fetchone()
+            if allowed_file_ids is not None:
+                c_placeholders = ",".join("?" for _ in id_list)
+                c_row = conn.execute(
+                    f"SELECT COUNT(*) as c FROM document_chunks WHERE file_id IN ({c_placeholders})",
+                    id_list,
+                ).fetchone()
+                zero_chunks_cursor = conn.execute(
+                    f"""
+                    SELECT COUNT(*) as c FROM file_records f
+                    WHERE f.trashed = 0 AND f.id IN ({c_placeholders})
+                      AND (SELECT COUNT(*) FROM document_chunks c WHERE c.file_id = f.id) = 0
+                    """,
+                    id_list,
+                )
+            else:
+                c_row = conn.execute("SELECT COUNT(*) as c FROM document_chunks").fetchone()
+                zero_chunks_cursor = conn.execute(
+                    """
+                    SELECT COUNT(*) as c FROM file_records f
+                    WHERE f.trashed = 0
+                      AND (SELECT COUNT(*) FROM document_chunks c WHERE c.file_id = f.id) = 0
+                    """
+                )
             total_chunks = int(c_row["c"] or 0)
-
-            zero_chunks_cursor = conn.execute(
-                """
-                SELECT COUNT(*) as c FROM file_records f
-                WHERE f.trashed = 0
-                  AND (SELECT COUNT(*) FROM document_chunks c WHERE c.file_id = f.id) = 0
-                """
-            )
             files_with_zero_chunks = int(zero_chunks_cursor.fetchone()["c"] or 0)
 
             # 4. Project tags distribution
             tag_dist: dict[str, int] = {}
             tag_cursor = conn.execute(
-                "SELECT project_tags_json FROM file_records WHERE trashed = 0 AND project_tags_json IS NOT NULL"
+                f"SELECT project_tags_json FROM file_records WHERE trashed = 0{scope_filter} AND project_tags_json IS NOT NULL",
+                scope_params,
             )
             for row in tag_cursor.fetchall():
                 if row["project_tags_json"]:
@@ -1376,7 +1429,8 @@ class CrawlStorage:
             # 5. Sharing status distribution
             sharing_dist: dict[str, int] = {}
             sharing_cursor = conn.execute(
-                "SELECT sharing_status, COUNT(*) as c FROM file_records WHERE trashed = 0 GROUP BY sharing_status"
+                f"SELECT sharing_status, COUNT(*) as c FROM file_records WHERE trashed = 0{scope_filter} GROUP BY sharing_status",
+                scope_params,
             )
             for row in sharing_cursor.fetchall():
                 status = row["sharing_status"] or "unknown"
@@ -1384,13 +1438,14 @@ class CrawlStorage:
 
             # 6. Recent 5 files
             recent_cursor = conn.execute(
-                """
+                f"""
                 SELECT id, name, mime_type, modified_time, project_tags_json
                 FROM file_records
-                WHERE trashed = 0
+                WHERE trashed = 0{scope_filter}
                 ORDER BY modified_time DESC NULLS LAST
                 LIMIT 5
-                """
+                """,
+                scope_params,
             )
             recent_files = []
             for row in recent_cursor.fetchall():

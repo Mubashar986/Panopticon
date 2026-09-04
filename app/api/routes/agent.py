@@ -223,10 +223,20 @@ def query_agent(
             )
         )
 
+    # Validate dossier_id container if specified
+    if payload.dossier_id:
+        dossier = storage.get_dossier(payload.dossier_id)
+        if not dossier:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project Dossier '{payload.dossier_id}' not found.",
+            )
+
     result = engine.run(
         query=payload.query,
         user_instructions=payload.user_instructions,
         history=history,
+        dossier_id=payload.dossier_id,
     )
 
     # Execute Citation Verification & Hallucination Guardrail
@@ -282,6 +292,7 @@ def query_agent(
         citations=citation_items,
         model=result.model,
         latency_ms=result.latency_ms,
+        dossier_id=payload.dossier_id,
     )
 
 
@@ -298,6 +309,15 @@ async def stream_agent_query(
 ) -> StreamingResponse:
     """Stream real-time agent reasoning steps, tool activations, tokens, and verified citations."""
     logger.info("Streaming agent query received: '%s' (thread_id: %s)", payload.query, payload.thread_id)
+
+    # Validate dossier_id container if specified
+    if payload.dossier_id:
+        dossier = storage.get_dossier(payload.dossier_id)
+        if not dossier:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Project Dossier '{payload.dossier_id}' not found.",
+            )
 
     # Determine LLM client
     if payload.model and payload.model.strip():
@@ -349,6 +369,7 @@ async def stream_agent_query(
                 query=payload.query,
                 user_instructions=payload.user_instructions,
                 history=history,
+                dossier_id=payload.dossier_id,
             ):
                 if await request.is_disconnected():
                     logger.debug("Client disconnected during agent streaming; aborting.")
@@ -368,6 +389,9 @@ async def stream_agent_query(
                             latency_ms=done_data.get("latency_ms"),
                         )
                     )
+
+                if event.event_type == "done" and payload.dossier_id:
+                    event.data["dossier_id"] = payload.dossier_id
 
                 yield event.to_sse()
         except Exception as exc:
