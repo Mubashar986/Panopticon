@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     GOOGLE_TOKEN_CACHE_FILE: str = "token.json"
     GOOGLE_SERVICE_ACCOUNT_FILE: str = "service_account.json"
     GOOGLE_DELEGATED_USER_EMAIL: str | None = None
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str | None = None
 
     # Meilisearch Config
     MEILI_HOST: str = "http://localhost:7700"

@@ -79,3 +79,44 @@ class CredentialUploadResponse(BaseModel):
     file_type: str = Field(..., description="'credentials' (OAuth) or 'service_account' (DWD)")
     saved_path: str = Field(..., description="Path where file was stored")
     message: str = Field(..., description="Confirmation message")
+
+
+class GoogleLoginResponse(BaseModel):
+    """Payload returned when initiating the 1-Click Google OAuth flow."""
+
+    model_config = ConfigDict(frozen=True)
+
+    authorization_url: str = Field(..., description="Google consent screen URL for browser redirect")
+    state: str = Field(..., description="CSRF protection state token")
+    redirect_uri: str = Field(..., description="Authorized redirect callback URI")
+    client_source: str = Field(..., description="Source of client credentials: 'environment' or 'credentials_file'")
+
+
+class WorkspaceDWDManifestResponse(BaseModel):
+    """Google Workspace Marketplace Admin installation manifest & DWD setup metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    application_name: str = Field(default="Panopticon", description="Application name")
+    client_id: str | None = Field(default=None, description="Numeric Client ID for Domain-Wide Delegation in Admin Console")
+    service_account_email: str | None = Field(default=None, description="Service Account email address")
+    required_scopes: list[str] = Field(default_factory=list, description="Google API scopes required for DWD installation")
+    admin_console_url: str = Field(
+        default="https://admin.google.com/ac/owl/domainwidedelegation",
+        description="Direct URL to Google Workspace Admin Console Domain-Wide Delegation settings",
+    )
+    setup_instructions: str = Field(..., description="Step-by-step guidance for Google Workspace Super Admins")
+
+
+class WorkspaceDWDStatusResponse(BaseModel):
+    """Diagnostic status for enterprise Google Workspace Domain-Wide Delegation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    configured: bool = Field(..., description="True if service account file and delegated email are configured")
+    service_account_found: bool = Field(..., description="True if service_account.json exists on disk")
+    service_account_email: str | None = Field(default=None, description="Parsed service account email, if available")
+    delegated_user_email: str | None = Field(default=None, description="Configured user email to impersonate")
+    scopes_authorized: list[str] = Field(default_factory=list, description="Configured DWD scopes")
+    connectivity_status: str = Field(..., description="'ready', 'missing_key', 'missing_delegated_user', or 'error'")
+    message: str = Field(..., description="Diagnostic assessment details")

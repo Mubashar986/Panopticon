@@ -453,11 +453,11 @@ graph TD
 - **Estimated time:** 60 min
 - **Difficulty:** Intermediate-Advanced
 - **Acceptance criteria:**
-  - [ ] `GET /api/auth/google/login` generates state and returns the Google OAuth consent URL.
-  - [ ] `GET /api/auth/google/callback` exchanges authorization code for user tokens and persists them securely.
-  - [ ] Pluggable auth provider automatically switches to authenticated mode and initiates crawl.
-  - [ ] Workspace DWD Marketplace Admin install endpoint stubbed and documented for enterprise rollouts.
-  - [ ] Zero raw tokens exposed to frontend or search indexes (Product Constraint 9).
+  - [x] `GET /api/auth/google/login` generates state and returns the Google OAuth consent URL.
+  - [x] `GET /api/auth/google/callback` exchanges authorization code for user tokens and persists them securely.
+  - [x] Pluggable auth provider automatically switches to authenticated mode and initiates crawl.
+  - [x] Workspace DWD Marketplace Admin install endpoint stubbed and documented for enterprise rollouts.
+  - [x] Zero raw tokens exposed to frontend or search indexes (Product Constraint 9).
 - **Verification idea:** Mock the OAuth exchange flow and verify tokens are safely persisted and trigger the sync engine.
 - **Next lifecycle skill:** `concept-to-code-bridge`
 
@@ -575,8 +575,8 @@ graph TD
 | **9.9** | **Done** | None | `concept-to-code-bridge` | **Completed:** Full-Corpus Deep Chunk Ingestion & Native Meilisearch Hybrid Vector Indexing (Dual-index, 92 files + 92 chunks, sub-20ms vector retrieval, zero errors) |
 | **10.1** | **Done** | None | `concept-to-code-bridge` | **Completed:** Project Dossiers Domain Model, Relational Schema & CRUD APIs (Storage + REST Endpoints + Test Suites) |
 | **10.2** | **Done** | None | `concept-to-code-bridge` | **Completed:** Project-Scoped RAG Rig & Tool Isolation ("Ask Dossier") (Scoped tool execution, empty fast exits, diff/metadata permission boundaries, and API validation) |
-| **10.3** | **Yes** | None | `concept-to-code-bridge` | **1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam** |
-| **10.4** | No | Needs 10.1, 10.2, 10.3 | `picasso` / `escher` / `vermeer` | Complete High-Rhythm Frontend Redesign |
+| **10.3** | **Done** | None | `concept-to-code-bridge` | **Completed:** 1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam (Dynamic env resolution, CSRF protection, token write, provider hot-swap, and DWD endpoints) |
+| **10.4** | **Yes** | None | `picasso` / `escher` / `vermeer` | Complete High-Rhythm Frontend Redesign |
 | **11.1** | No | Needs 10.1 | `concept-to-code-bridge` | Pluggable `SourceConnector` Protocol & Registry |
 | **11.2** | No | Needs 11.1 | `concept-to-code-bridge` | Universal Multi-Source Document Schema |
 
@@ -584,11 +584,11 @@ graph TD
 
 ## 11. Recommended Next Task
 
-**Start with:** **Task 10.3 — 1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam**
+**Start with:** **Task 10.4 — Complete High-Rhythm Frontend Redesign (The Muses Sequence: Picasso, Escher & Vermeer)**
 
-**Why:** Now that Project Dossiers (10.1) and Project-Scoped RAG Tool Isolation (10.2) are fully implemented and verified, Task 10.3 implements the web-based OAuth 2.0 redirect flow and Google Workspace Domain-Wide Delegation (DWD) admin seam, enabling non-technical users to authenticate and index organization-wide documents seamlessly.
+**Why:** With Project Dossiers (10.1), Project-Scoped RAG Tool Isolation (10.2), and 1-Click Hosted Web OAuth / DWD (10.3) completed and verified, the platform has full enterprise backend capabilities. Task 10.4 overhauls the React dashboard to integrate Dossiers, dense document indexing, instant diff inspection, and "Ask Dossier" contextual streaming AI into a polished, high-rhythm desktop user experience adhering to the Muses design system workflow.
 
-**What happens next:** Run Stage 1 with `concept-to-code-bridge` for Task 10.3.
+**What happens next:** Run Step 1 of the Muses sequence (`picasso`) to establish or verify design tokens.
 
 ---
 
