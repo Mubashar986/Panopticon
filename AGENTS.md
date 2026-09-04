@@ -288,13 +288,14 @@ Before entering Stage 1 or writing code for any task requiring external services
 
 ---
 
-## 12. Strict Usage Protection: Zero Terminal Testing & Zero Push Policy
+## 12. Strict Usage Protection: Zero Terminal Testing Policy
 
 To protect the user's credits and API usage:
 1. **Never Run Automated Terminal Tests:** The agent is **STRICTLY FORBIDDEN** from executing terminal test commands (`pytest`, `npm test`, `playwright`, etc.) on its own initiative. Verification must be performed via static code inspection and dual-graph analysis. Only run tests if the user explicitly writes "run test" in their prompt.
 2. **Never Run Terminal Build Commands for Checking:** The agent MUST NOT run `npm run build` or CLI builds to check for TypeScript errors. Inspect types and interfaces statically.
-3. **Never Push Changes to Remote (`git push`):** The agent MUST NEVER run `git push`. All Git operations must remain strictly local (`git add`, `git commit`). The agent provides a copy-pasteable push command for the user to execute themselves if desired.
+3. **Remote Push Protocol:** Pushing to remote (`git push`) is executed upon user instruction.
 4. **No Unsolicited Terminal Commands:** Do not run shell or terminal commands to probe or monitor system status.
+
 
 ---
 

@@ -47,10 +47,11 @@ These are permanent, drawn directly from the project requirements, and apply reg
 - **Heuristic & Token Enforcement:** Build all UI strictly via **Vermeer** (100% tokens, 10 usability heuristics, 6 interactive states: `default, hover, active, focus, disabled, loading`).
 - **Self-Audit:** Verify 0 stray hex codes or un-tokenized px before marking any UI task complete.
 
-## 7. Strict Zero-Terminal-Testing & Zero-Push Policy (Usage Protection)
-- The agent is **STRICTLY FORBIDDEN** from running automated terminal tests (`pytest`, `npm test`, etc.) or checking builds (`npm run build`) in terminal.
-- The agent is **STRICTLY FORBIDDEN** from running `git push`. Local commits only.
+## 7. Strict Usage Protection: Zero-Terminal-Testing Policy
+- The agent is **STRICTLY FORBIDDEN** from running automated terminal tests (`pytest`, `npm test`, etc.) or checking builds (`npm run build`) in terminal unless explicitly prompted.
 - Code verification must be performed via static inspection, typing analysis, and MCP graph tools.
+- Git pushing to remote is permitted upon explicit user request.
+
 
 ## 8. Mandatory Graperoot Dual-Graph MCP
 - Codebase exploration, symbol lookups, call-graph analysis, and blast radius impact MUST be performed using the `graperoot` MCP tools (`graph_retrieve`, `graph_read`, `graph_neighbors`, `graph_impact`, `fallback_rg`).
