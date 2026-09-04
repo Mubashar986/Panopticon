@@ -193,3 +193,49 @@ export interface DiffListResponse {
   items: DocumentDiff[];
 }
 
+export interface DossierSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  status: string;
+  item_count: number;
+  member_count: number;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DossierMemberItem {
+  id: string;
+  dossier_id: string;
+  user_email: string;
+  role: string;
+  added_at: string;
+}
+
+export interface DossierDetail {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  color: string | null;
+  icon: string | null;
+  status: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DossierCreatePayload {
+  name: string;
+  slug?: string;
+  description?: string;
+  color?: string;
+  icon?: string;
+  initial_file_ids?: string[];
+}
+
+

@@ -30,7 +30,7 @@ export interface UseAgentChatReturn {
   clearChat: () => void;
 }
 
-export function useAgentChat(): UseAgentChatReturn {
+export function useAgentChat(dossierId?: string | null): UseAgentChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [activeTool, setActiveTool] = useState<string | null>(null);
@@ -204,6 +204,7 @@ export function useAgentChat(): UseAgentChatReturn {
             query: trimmed,
             thread_id: currentThreadId,
             model: selectedModel || undefined,
+            dossier_id: dossierId || undefined,
           }),
           signal: controller.signal,
         });

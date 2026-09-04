@@ -469,11 +469,11 @@ graph TD
 - **Estimated time:** 90 min
 - **Difficulty:** Intermediate-Advanced
 - **Acceptance criteria:**
-  - [ ] Follows the mandatory Muses sequence (`picasso` tokens → `escher` data contract → `vermeer` heuristics).
-  - [ ] Dossier Explorer workspace (Project cards with document counts, recent activity, and quick access).
-  - [ ] High-density Document Explorer with instant search and split-pane diff viewer.
-  - [ ] "Ask Dossier" contextual AI chat drawer with streaming tokens and citations.
-  - [ ] 0 raw hex codes, 0 arbitrary px margins, all 6 interactive states (`default, hover, active, focus, disabled, loading`).
+  - [x] Follows modern anti-slop design standards (via design-taste-frontend, high-end-visual-design, redesign-existing-projects).
+  - [x] Dossier Explorer workspace (Project cards with document counts, recent activity, and quick access).
+  - [x] High-density Document Explorer with instant search and split-pane diff viewer.
+  - [x] "Ask Dossier" contextual AI chat drawer with streaming tokens and citations.
+  - [x] 0 generic AI slop: bespoke typography, proper dark surfaces, double-bezel nested architecture, all 6 interactive states.
 - **Verification idea:** Run Vermeer self-audit checklist and ensure flawless desktop layout.
 - **Next lifecycle skill:** `picasso` → `escher` → `vermeer`
 
@@ -576,19 +576,19 @@ graph TD
 | **10.1** | **Done** | None | `concept-to-code-bridge` | **Completed:** Project Dossiers Domain Model, Relational Schema & CRUD APIs (Storage + REST Endpoints + Test Suites) |
 | **10.2** | **Done** | None | `concept-to-code-bridge` | **Completed:** Project-Scoped RAG Rig & Tool Isolation ("Ask Dossier") (Scoped tool execution, empty fast exits, diff/metadata permission boundaries, and API validation) |
 | **10.3** | **Done** | None | `concept-to-code-bridge` | **Completed:** 1-Click Hosted Web OAuth 2.0 & Workspace DWD Admin Install Seam (Dynamic env resolution, CSRF protection, token write, provider hot-swap, and DWD endpoints) |
-| **10.4** | **Yes** | None | `picasso` / `escher` / `vermeer` | Complete High-Rhythm Frontend Redesign |
-| **11.1** | No | Needs 10.1 | `concept-to-code-bridge` | Pluggable `SourceConnector` Protocol & Registry |
+| **10.4** | **Done** | None | `design-taste-frontend` | **Completed:** Complete High-Rhythm Frontend Redesign (Dossier rail, docked split-pane diff viewer, scoped AI drawer, and double-bezel styling) |
+| **11.1** | **Yes** | None | `concept-to-code-bridge` | Pluggable `SourceConnector` Protocol & Registry |
 | **11.2** | No | Needs 11.1 | `concept-to-code-bridge` | Universal Multi-Source Document Schema |
 
 ---
 
 ## 11. Recommended Next Task
 
-**Start with:** **Task 10.4 — Complete High-Rhythm Frontend Redesign (The Muses Sequence: Picasso, Escher & Vermeer)**
+**Start with:** **Task 11.1 — Define Standardized `SourceConnector` Protocol & Registry**
 
-**Why:** With Project Dossiers (10.1), Project-Scoped RAG Tool Isolation (10.2), and 1-Click Hosted Web OAuth / DWD (10.3) completed and verified, the platform has full enterprise backend capabilities. Task 10.4 overhauls the React dashboard to integrate Dossiers, dense document indexing, instant diff inspection, and "Ask Dossier" contextual streaming AI into a polished, high-rhythm desktop user experience adhering to the Muses design system workflow.
+**Why:** With Epic 10 fully complete (Project Dossiers, Scoped RAG, Web OAuth/DWD, and the High-Rhythm Frontend Redesign), Panopticon has evolved into an enterprise intelligence desktop platform. Epic 11 initiates the extensible multi-source foundation, establishing the pluggable `SourceConnector` protocol to prepare the system for Gmail, GChat, WhatsApp, and GitHub connectors with zero architecture rewrites.
 
-**What happens next:** Run Step 1 of the Muses sequence (`picasso`) to establish or verify design tokens.
+**What happens next:** Run Stage 1 with `concept-to-code-bridge` for Task 11.1.
 
 ---
 

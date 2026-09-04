@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { DocumentVersion, DocumentDiff, VersionHistoryResponse, DiffListResponse } from '../types/api';
-
-const API_BASE = 'http://localhost:8000';
+import { getApiUrl } from '../config/api';
 
 interface UseVersionHistoryReturn {
   versions: DocumentVersion[];
@@ -26,8 +25,8 @@ export function useVersionHistory(fileId: string | null): UseVersionHistoryRetur
     setError(null);
     try {
       const [versionsRes, diffsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/documents/${id}/versions`),
-        fetch(`${API_BASE}/api/documents/${id}/diffs`),
+        fetch(getApiUrl(`/api/documents/${id}/versions`)),
+        fetch(getApiUrl(`/api/documents/${id}/diffs`)),
       ]);
 
       if (!versionsRes.ok) {
