@@ -545,5 +545,163 @@ class AgentMessage(BaseModel):
         return v
 
 
+DossierRole = Literal["admin", "editor", "viewer"]
+DossierStatus = Literal["active", "archived"]
 
 
+def slugify(text: str) -> str:
+    """Generate a clean URL-safe slug from a title string.
+
+    Args:
+        text: Raw display title or project name.
+
+    Returns:
+        Clean, lowercase, hyphenated slug string.
+    """
+    clean = re.sub(r"[^\w\s-]", "", text.strip().lower())
+    clean = re.sub(r"[-\s]+", "-", clean).strip("-")
+    return clean or "unnamed-project"
+
+
+class Dossier(BaseModel):
+    """Domain model representing a containerized project workspace."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"dos_{uuid.uuid4().hex[:12]}",
+        description="Unique dossier identifier",
+    )
+    name: str = Field(
+        ...,
+        description="Human-readable project or dossier name",
+    )
+    slug: str = Field(
+        ...,
+        description="URL-safe unique identifier slug",
+    )
+    description: str | None = Field(
+        default=None,
+        description="Detailed summary of the project scope and purpose",
+    )
+    color: str | None = Field(
+        default="#2563EB",
+        description="Visual badge accent color for dashboard cards",
+    )
+    icon: str | None = Field(
+        default="folder",
+        description="Icon identifier for UI rendering",
+    )
+    status: DossierStatus = Field(
+        default="active",
+        description="Lifecycle status: 'active' or 'archived'",
+    )
+    created_by: str | None = Field(
+        default=None,
+        description="Email or user ID of the creator",
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Creation timestamp in UTC",
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Last modification timestamp in UTC",
+    )
+
+    @field_validator("id", "name", "slug", "description", "color", "icon", "created_by", mode="before")
+    @classmethod
+    def clean_dossier_strings(cls, v: Any) -> Any:
+        """Strip illegal control characters from dossier strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+
+class DossierItem(BaseModel):
+    """Domain model representing the junction link between a dossier and a tracked Drive file."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"di_{uuid.uuid4().hex[:12]}",
+        description="Unique junction record identifier",
+    )
+    dossier_id: str = Field(
+        ...,
+        description="Parent dossier identifier",
+    )
+    file_id: str = Field(
+        ...,
+        description="Google Drive file identifier referencing file_records",
+    )
+    added_by: str | None = Field(
+        default=None,
+        description="Email or ID of user who associated the file",
+    )
+    added_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Association timestamp in UTC",
+    )
+
+    @field_validator("id", "dossier_id", "file_id", "added_by", mode="before")
+    @classmethod
+    def clean_item_strings(cls, v: Any) -> Any:
+        """Strip control characters from item strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+
+class DossierMember(BaseModel):
+    """Domain model representing user membership and RBAC role within a dossier."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str = Field(
+        default_factory=lambda: f"dm_{uuid.uuid4().hex[:12]}",
+        description="Unique membership record identifier",
+    )
+    dossier_id: str = Field(
+        ...,
+        description="Parent dossier identifier",
+    )
+    user_email: str = Field(
+        ...,
+        description="Email address of the member",
+    )
+    role: DossierRole = Field(
+        default="viewer",
+        description="Access control role: 'admin', 'editor', or 'viewer'",
+    )
+    added_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        description="Membership grant timestamp in UTC",
+    )
+
+    @field_validator("id", "dossier_id", "user_email", mode="before")
+    @classmethod
+    def clean_member_strings(cls, v: Any) -> Any:
+        """Strip control characters from member strings."""
+        if isinstance(v, str):
+            return sanitize_string(v)
+        return v
+
+
+class DossierSummary(BaseModel):
+    """Aggregated summary projection of a dossier with item and member counts."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str
+    name: str
+    slug: str
+    description: str | None = None
+    color: str | None = "#2563EB"
+    icon: str | None = "folder"
+    status: DossierStatus = "active"
+    item_count: int = 0
+    member_count: int = 0
+    created_by: str | None = None
+    created_at: datetime
+    updated_at: datetime

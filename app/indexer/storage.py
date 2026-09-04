@@ -18,9 +18,16 @@ from app.indexer.models import (
     DocumentChunk,
     DocumentDiff,
     DocumentVersion,
+    Dossier,
+    DossierItem,
+    DossierMember,
+    DossierRole,
+    DossierStatus,
+    DossierSummary,
     DriveFileMetadata,
     DriveLabel,
     DrivePermission,
+    slugify,
 )
 
 logger = get_logger("panopticon.indexer.storage")
@@ -172,6 +179,48 @@ class CrawlStorage:
 
                 CREATE INDEX IF NOT EXISTS idx_threads_updated_at ON agent_threads(updated_at DESC);
                 CREATE INDEX IF NOT EXISTS idx_messages_thread_id ON agent_messages(thread_id, created_at ASC);
+
+                CREATE TABLE IF NOT EXISTS dossiers (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    slug TEXT UNIQUE NOT NULL,
+                    description TEXT,
+                    color TEXT DEFAULT '#2563EB',
+                    icon TEXT DEFAULT 'folder',
+                    status TEXT NOT NULL DEFAULT 'active',
+                    created_by TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS dossier_items (
+                    id TEXT PRIMARY KEY,
+                    dossier_id TEXT NOT NULL,
+                    file_id TEXT NOT NULL,
+                    added_by TEXT,
+                    added_at TEXT NOT NULL,
+                    FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE,
+                    FOREIGN KEY (file_id) REFERENCES file_records(id) ON DELETE CASCADE,
+                    UNIQUE(dossier_id, file_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS dossier_members (
+                    id TEXT PRIMARY KEY,
+                    dossier_id TEXT NOT NULL,
+                    user_email TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'viewer',
+                    added_at TEXT NOT NULL,
+                    FOREIGN KEY (dossier_id) REFERENCES dossiers(id) ON DELETE CASCADE,
+                    UNIQUE(dossier_id, user_email)
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_dossiers_slug ON dossiers(slug);
+                CREATE INDEX IF NOT EXISTS idx_dossiers_status ON dossiers(status);
+                CREATE INDEX IF NOT EXISTS idx_dossiers_updated_at ON dossiers(updated_at DESC);
+                CREATE INDEX IF NOT EXISTS idx_dossier_items_dossier ON dossier_items(dossier_id);
+                CREATE INDEX IF NOT EXISTS idx_dossier_items_file ON dossier_items(file_id);
+                CREATE INDEX IF NOT EXISTS idx_dossier_members_dossier ON dossier_members(dossier_id);
+                CREATE INDEX IF NOT EXISTS idx_dossier_members_email ON dossier_members(user_email);
                 """
             )
         logger.debug("Initialized SQLite storage schema at %s", self.db_path)
@@ -1406,6 +1455,433 @@ class CrawlStorage:
             model=row["model"],
             latency_ms=float(row["latency_ms"]) if row["latency_ms"] is not None else None,
             created_at=created_at,
+        )
+
+    # --------------------------------------------------------------------------
+    # Dossier (Project Workspace) Operations
+    # --------------------------------------------------------------------------
+
+    def create_dossier(
+        self,
+        name: str,
+        slug: str | None = None,
+        description: str | None = None,
+        color: str | None = "#2563EB",
+        icon: str | None = "folder",
+        status: DossierStatus = "active",
+        created_by: str | None = None,
+        initial_file_ids: list[str] | None = None,
+    ) -> Dossier:
+        """Create a new project dossier container with optional initial items and admin member.
+
+        Args:
+            name: Display name of the dossier.
+            slug: Optional URL-safe slug. If None, generated from name.
+            description: Optional detailed project summary.
+            color: Hex color string or token for UI cards.
+            icon: Lucide icon name.
+            status: Lifecycle status ('active' or 'archived').
+            created_by: Email or identifier of the user creating the dossier.
+            initial_file_ids: Optional list of Google Drive file IDs to associate immediately.
+
+        Returns:
+            Dossier: Created dossier domain entity.
+        """
+        dossier_id = f"dos_{uuid.uuid4().hex[:12]}"
+        base_slug = slugify(slug if slug else name)
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+
+        with self.get_connection() as conn:
+            # Ensure unique slug
+            candidate_slug = base_slug
+            counter = 2
+            while True:
+                cursor = conn.execute("SELECT 1 FROM dossiers WHERE slug = ?", (candidate_slug,))
+                if not cursor.fetchone():
+                    break
+                candidate_slug = f"{base_slug}-{counter}"
+                counter += 1
+
+            conn.execute(
+                """
+                INSERT INTO dossiers (id, name, slug, description, color, icon, status, created_by, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    dossier_id,
+                    name.strip(),
+                    candidate_slug,
+                    description.strip() if description else None,
+                    color or "#2563EB",
+                    icon or "folder",
+                    status,
+                    created_by,
+                    now_iso,
+                    now_iso,
+                ),
+            )
+
+            # Auto-register creator as admin member
+            if created_by:
+                member_id = f"dm_{uuid.uuid4().hex[:12]}"
+                conn.execute(
+                    """
+                    INSERT OR IGNORE INTO dossier_members (id, dossier_id, user_email, role, added_at)
+                    VALUES (?, ?, ?, 'admin', ?)
+                    """,
+                    (member_id, dossier_id, created_by.strip(), now_iso),
+                )
+
+            # Associate initial files if provided
+            if initial_file_ids:
+                for file_id in initial_file_ids:
+                    cleaned_id = file_id.strip()
+                    if not cleaned_id:
+                        continue
+                    item_id = f"di_{uuid.uuid4().hex[:12]}"
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO dossier_items (id, dossier_id, file_id, added_by, added_at)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (item_id, dossier_id, cleaned_id, created_by, now_iso),
+                    )
+
+            logger.info("Created dossier '%s' (id=%s, slug=%s)", name, dossier_id, candidate_slug)
+            return Dossier(
+                id=dossier_id,
+                name=name.strip(),
+                slug=candidate_slug,
+                description=description.strip() if description else None,
+                color=color or "#2563EB",
+                icon=icon or "folder",
+                status=status,
+                created_by=created_by,
+                created_at=now_dt,
+                updated_at=now_dt,
+            )
+
+    def get_dossier(self, dossier_id: str) -> Dossier | None:
+        """Fetch a single dossier by ID."""
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT * FROM dossiers WHERE id = ?", (dossier_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_dossier_model(row)
+
+    def get_dossier_by_slug(self, slug: str) -> Dossier | None:
+        """Fetch a single dossier by its unique URL slug."""
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT * FROM dossiers WHERE slug = ?", (slug,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_dossier_model(row)
+
+    def list_dossiers(
+        self,
+        status: str | None = None,
+        sort_by: str = "updated_at:desc",
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[DossierSummary], int]:
+        """List dossiers with aggregated item and member counts, pagination, and sorting."""
+        where_clauses: list[str] = []
+        params: list[Any] = []
+
+        if status:
+            where_clauses.append("d.status = ?")
+            params.append(status)
+
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+
+        sort_map = {
+            "updated_at:desc": "d.updated_at DESC",
+            "updated_at:asc": "d.updated_at ASC",
+            "name:asc": "d.name COLLATE NOCASE ASC",
+            "name:desc": "d.name COLLATE NOCASE DESC",
+            "created_at:desc": "d.created_at DESC",
+            "created_at:asc": "d.created_at ASC",
+        }
+        order_by = sort_map.get(sort_by, "d.updated_at DESC")
+
+        count_sql = f"SELECT COUNT(*) as total FROM dossiers d {where_sql}"
+        data_sql = f"""
+            SELECT 
+                d.id, d.name, d.slug, d.description, d.color, d.icon, d.status,
+                d.created_by, d.created_at, d.updated_at,
+                COUNT(DISTINCT di.file_id) as item_count,
+                COUNT(DISTINCT dm.id) as member_count
+            FROM dossiers d
+            LEFT JOIN dossier_items di ON d.id = di.dossier_id
+            LEFT JOIN dossier_members dm ON d.id = dm.dossier_id
+            {where_sql}
+            GROUP BY d.id
+            ORDER BY {order_by}
+            LIMIT ? OFFSET ?
+        """
+
+        with self.get_connection() as conn:
+            count_cursor = conn.execute(count_sql, params)
+            count_row = count_cursor.fetchone()
+            total = int(count_row["total"]) if count_row else 0
+
+            data_params = list(params) + [limit, offset]
+            data_cursor = conn.execute(data_sql, data_params)
+            summaries = [self._row_to_dossier_summary(row) for row in data_cursor.fetchall()]
+            return summaries, total
+
+    def update_dossier(
+        self,
+        dossier_id: str,
+        name: str | None = None,
+        slug: str | None = None,
+        description: str | None = None,
+        color: str | None = None,
+        icon: str | None = None,
+        status: DossierStatus | None = None,
+    ) -> Dossier | None:
+        """Update dossier attributes and touch updated_at."""
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT * FROM dossiers WHERE id = ?", (dossier_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            updates: list[str] = []
+            params: list[Any] = []
+
+            if name is not None:
+                updates.append("name = ?")
+                params.append(name.strip())
+
+            if slug is not None:
+                cleaned_slug = slugify(slug)
+                check_cursor = conn.execute(
+                    "SELECT 1 FROM dossiers WHERE slug = ? AND id != ?",
+                    (cleaned_slug, dossier_id),
+                )
+                if check_cursor.fetchone():
+                    raise ValueError(f"Slug '{cleaned_slug}' is already taken by another dossier")
+                updates.append("slug = ?")
+                params.append(cleaned_slug)
+
+            if description is not None:
+                updates.append("description = ?")
+                params.append(description.strip() if description else None)
+
+            if color is not None:
+                updates.append("color = ?")
+                params.append(color)
+
+            if icon is not None:
+                updates.append("icon = ?")
+                params.append(icon)
+
+            if status is not None:
+                updates.append("status = ?")
+                params.append(status)
+
+            if not updates:
+                return self._row_to_dossier_model(row)
+
+            now_iso = datetime.now(timezone.utc).isoformat()
+            updates.append("updated_at = ?")
+            params.append(now_iso)
+            params.append(dossier_id)
+
+            sql = f"UPDATE dossiers SET {', '.join(updates)} WHERE id = ?"
+            conn.execute(sql, params)
+
+            fetch_cursor = conn.execute("SELECT * FROM dossiers WHERE id = ?", (dossier_id,))
+            updated_row = fetch_cursor.fetchone()
+            return self._row_to_dossier_model(updated_row)
+
+    def delete_dossier(self, dossier_id: str) -> bool:
+        """Delete a dossier and its junction associations via CASCADE. Underlying files are preserved."""
+        with self.get_connection() as conn:
+            cursor = conn.execute("DELETE FROM dossiers WHERE id = ?", (dossier_id,))
+            return cursor.rowcount > 0
+
+    def add_dossier_items(
+        self,
+        dossier_id: str,
+        file_ids: list[str],
+        added_by: str | None = None,
+    ) -> int:
+        """Add multiple Google Drive files to a dossier. Returns number of newly associated files."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        added_count = 0
+
+        with self.get_connection() as conn:
+            # Check dossier exists
+            cursor = conn.execute("SELECT 1 FROM dossiers WHERE id = ?", (dossier_id,))
+            if not cursor.fetchone():
+                raise ValueError(f"Dossier '{dossier_id}' not found")
+
+            for file_id in file_ids:
+                cleaned_id = file_id.strip()
+                if not cleaned_id:
+                    continue
+                item_id = f"di_{uuid.uuid4().hex[:12]}"
+                item_cursor = conn.execute(
+                    """
+                    INSERT OR IGNORE INTO dossier_items (id, dossier_id, file_id, added_by, added_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (item_id, dossier_id, cleaned_id, added_by, now_iso),
+                )
+                added_count += item_cursor.rowcount
+
+            if added_count > 0:
+                conn.execute("UPDATE dossiers SET updated_at = ? WHERE id = ?", (now_iso, dossier_id))
+
+        return added_count
+
+    def remove_dossier_item(self, dossier_id: str, file_id: str) -> bool:
+        """Remove a Google Drive file association from a dossier. Underlying file is preserved."""
+        now_iso = datetime.now(timezone.utc).isoformat()
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM dossier_items WHERE dossier_id = ? AND file_id = ?",
+                (dossier_id, file_id),
+            )
+            if cursor.rowcount > 0:
+                conn.execute("UPDATE dossiers SET updated_at = ? WHERE id = ?", (now_iso, dossier_id))
+                return True
+            return False
+
+    def list_dossier_items(
+        self,
+        dossier_id: str,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[DriveFileMetadata], int]:
+        """List Google Drive files associated with a dossier."""
+        with self.get_connection() as conn:
+            count_cursor = conn.execute(
+                "SELECT COUNT(*) as total FROM dossier_items WHERE dossier_id = ?",
+                (dossier_id,),
+            )
+            count_row = count_cursor.fetchone()
+            total = int(count_row["total"]) if count_row else 0
+
+            data_cursor = conn.execute(
+                """
+                SELECT f.* FROM file_records f
+                JOIN dossier_items di ON f.id = di.file_id
+                WHERE di.dossier_id = ?
+                ORDER BY di.added_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (dossier_id, limit, offset),
+            )
+            files = [self._row_to_model(row) for row in data_cursor.fetchall()]
+            return files, total
+
+    def add_dossier_member(
+        self,
+        dossier_id: str,
+        user_email: str,
+        role: DossierRole = "viewer",
+    ) -> DossierMember:
+        """Add or update user membership and role in a dossier."""
+        member_id = f"dm_{uuid.uuid4().hex[:12]}"
+        now_dt = datetime.now(timezone.utc)
+        now_iso = now_dt.isoformat()
+        email_clean = user_email.strip().lower()
+
+        with self.get_connection() as conn:
+            cursor = conn.execute("SELECT 1 FROM dossiers WHERE id = ?", (dossier_id,))
+            if not cursor.fetchone():
+                raise ValueError(f"Dossier '{dossier_id}' not found")
+
+            conn.execute(
+                """
+                INSERT INTO dossier_members (id, dossier_id, user_email, role, added_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(dossier_id, user_email) DO UPDATE SET
+                    role = excluded.role,
+                    added_at = excluded.added_at
+                """,
+                (member_id, dossier_id, email_clean, role, now_iso),
+            )
+
+            fetch_cursor = conn.execute(
+                "SELECT * FROM dossier_members WHERE dossier_id = ? AND user_email = ?",
+                (dossier_id, email_clean),
+            )
+            row = fetch_cursor.fetchone()
+            return self._row_to_dossier_member(row)
+
+    def remove_dossier_member(self, dossier_id: str, user_email: str) -> bool:
+        """Remove a member from a dossier."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM dossier_members WHERE dossier_id = ? AND user_email = ?",
+                (dossier_id, user_email.strip().lower()),
+            )
+            return cursor.rowcount > 0
+
+    def list_dossier_members(self, dossier_id: str) -> list[DossierMember]:
+        """List all members and their roles for a dossier."""
+        with self.get_connection() as conn:
+            cursor = conn.execute(
+                "SELECT * FROM dossier_members WHERE dossier_id = ? ORDER BY added_at ASC",
+                (dossier_id,),
+            )
+            return [self._row_to_dossier_member(row) for row in cursor.fetchall()]
+
+    @staticmethod
+    def _row_to_dossier_model(row: sqlite3.Row) -> Dossier:
+        """Convert a database row into a Dossier domain model."""
+        created_at = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+        updated_at = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00"))
+        return Dossier(
+            id=row["id"],
+            name=row["name"],
+            slug=row["slug"],
+            description=row["description"],
+            color=row["color"],
+            icon=row["icon"],
+            status=row["status"],
+            created_by=row["created_by"],
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+
+    @staticmethod
+    def _row_to_dossier_summary(row: sqlite3.Row) -> DossierSummary:
+        """Convert a database row into a DossierSummary model."""
+        created_at = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+        updated_at = datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00"))
+        return DossierSummary(
+            id=row["id"],
+            name=row["name"],
+            slug=row["slug"],
+            description=row["description"],
+            color=row["color"],
+            icon=row["icon"],
+            status=row["status"],
+            item_count=int(row["item_count"]) if "item_count" in row.keys() else 0,
+            member_count=int(row["member_count"]) if "member_count" in row.keys() else 0,
+            created_by=row["created_by"],
+            created_at=created_at,
+            updated_at=updated_at,
+        )
+
+    @staticmethod
+    def _row_to_dossier_member(row: sqlite3.Row) -> DossierMember:
+        """Convert a database row into a DossierMember domain model."""
+        added_at = datetime.fromisoformat(row["added_at"].replace("Z", "+00:00"))
+        return DossierMember(
+            id=row["id"],
+            dossier_id=row["dossier_id"],
+            user_email=row["user_email"],
+            role=row["role"],
+            added_at=added_at,
         )
 
 

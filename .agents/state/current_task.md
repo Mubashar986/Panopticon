@@ -1,12 +1,12 @@
 # Current Task State
 
-**WBS Task ID:** Task 5.1
-**Task Name:** Scaffold the React app & Design System Foundation
-**Epic:** Epic 5 — Dashboard (React)
-**Track:** React 19 + TypeScript + Design Tokens
+**WBS Task ID:** Task 10.1
+**Task Name:** Project Dossiers Domain Model, Relational Schema & CRUD APIs
+**Epic:** Epic 10 — Enterprise Workspace, Project Dossiers & Web OAuth (Phase 4)
+**Track:** Python (FastAPI + SQLite WAL + Pydantic v2)
 **Status:** COMPLETED & VERIFIED
-**Current Stage:** Stage 4: Testing & Verification (Passed 10/10 checks, 0 TS errors, 0 hex drift)
-**Dependencies:** Task 4.1, Task 4.2 (All Completed)
+**Current Stage:** Stage 4: Testing & Verification (COMPLETED)
+**Dependencies:** Task 7.1, Task 8.1, Task 9.9 (All Completed & Verified)
 **Blockers:** None
 
-Platform Status: Task 5.1 is fully verified (Vite + React 19 + TypeScript scaffolded with 100% token binding from `tokens.json`, ADR-0005 accepted, Escher contract audited in `backend-requirements.md`, and 148/148 backend tests passing). Ready for Task 5.2 (Search Bar with debounced input and tag filter dropdown).
+Platform Status: Task 10.1 is fully implemented and statically verified. Relational tables `dossiers`, `dossier_items`, `dossier_members` created in SQLite WAL schema, domain models in `models.py`, CRUD repository in `storage.py`, schemas in `dossiers.py`, endpoints in `/api/dossiers`, and test suites in `tests/test_dossiers_storage.py` and `tests/test_api_dossiers.py`. Ready for Task 10.2 (Project-Scoped RAG Rig & Tool Isolation "Ask Dossier").
