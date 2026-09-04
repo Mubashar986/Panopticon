@@ -108,5 +108,36 @@ Resolution: Resolved.
 Remaining Risk: None.
 Resolved On: 2026-09-04
 
+## ISSUE-0004 — Windows cmd.exe subshell 'node' resolution failure during npm script execution
 
-
+Status: FIXED_PENDING_VERIFICATION
+Severity: MEDIUM
+Detected: 2026-09-04
+Detected During: Task 10.4 frontend local dev execution
+Architectural Domain: Tooling / OS Environment / Windows PATH
+Component: Windows HKCU/HKLM Environment, frontend/package.json
+Symptom: Running `npm run dev` in PowerShell produced:
+  > panopticon-observatory@0.1.0 dev
+  > node ./node_modules/vite/bin/vite.js
+  'node' is not recognized as an internal or external command, operable program or batch file.
+Reproduction: `cd frontend; npm run dev` in a terminal where user environment has not inherited `C:\Program Files\nodejs\` or where Machine PATH bloat causes `cmd.exe` buffer truncation.
+Evidence: 
+  1. `Machine PATH` length was 11,740 characters across 286 segments containing recursive `%PATH%` (segment 18) and 18 duplicate blocks.
+  2. `User PATH` (HKCU\Environment\Path) completely lacked `C:\Program Files\nodejs`.
+  3. `npm.ps1` runs because PowerShell executes it with internal `$NODE_EXE="$PSScriptRoot/node.exe"`, but npm spawns `cmd.exe /d /s /c "node ..."` which relies on `%PATH%`.
+  4. In existing open terminals, the process environment lacks Node in User PATH, causing `cmd.exe` to fail lookup.
+Root Cause: 
+  Node.js was installed only into the system-wide Machine PATH (HKLM) and not User PATH (HKCU). Because Machine PATH was bloated to 11,740 characters with unexpanded/recursive `%PATH%`, Windows `cmd.exe` subshells spawned by `npm` either truncated `%PATH%` or did not inherit `C:\Program Files\nodejs`. Running processes also do not dynamically refresh environment variables from registry without session reload.
+Contributing Factors: Legacy bloated Machine PATH, npm default `script-shell` being `cmd.exe`.
+Affected Scope: Local frontend development server runner in PowerShell.
+Regression Risk: LOW
+Related WBS: Task 10.4
+Related Artifacts: `.agents/artifacts/task_10_4/task_10_4_architect_analysis.md`
+Fix: 
+  1. Safely prepended `C:\Program Files\nodejs` directly to `HKCU\Environment\Path` via WinReg and broadcasted `WM_SETTINGCHANGE`.
+  2. Added native `frontend/dev.ps1` runner for zero-dependency, zero-cmd.exe direct execution in PowerShell.
+Verification: HKCU registry entry verified present at index 0.
+Regression Verification: Cross-checked `inspect_path.py`.
+Resolution: Fixed pending user verification in their terminal session.
+Remaining Risk: Existing terminal window needs one-time session variable refresh `$env:Path = 'C:\Program Files\nodejs;' + $env:Path` or a fresh terminal window.
+Resolved On: 2026-09-04
