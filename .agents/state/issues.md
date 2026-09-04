@@ -78,4 +78,35 @@ Resolution: Resolved.
 Remaining Risk: None.
 Resolved On: 2026-09-03
 
+## ISSUE-0003 — Windows PowerShell npm script resolution failure: 'vite' is not recognized
+
+Status: RESOLVED
+Severity: MEDIUM
+Detected: 2026-09-04
+Detected During: Task 10.4 frontend development server startup
+Architectural Domain: Tooling / Build Environment
+Component: frontend/package.json (scripts.dev: vite)
+Symptom: Running `npm run dev` in `frontend/` failed with `'vite' is not recognized as an internal or external command, operable program or batch file.`
+Reproduction: `cd frontend; npm run dev` when `node_modules` is absent or actively locked during concurrent installation.
+Evidence: 
+  Terminal stdout:
+  > panopticon-observatory@0.1.0 dev
+  > vite
+  'vite' is not recognized as an internal or external command, operable program or batch file.
+Root Cause: 
+  1. `node_modules` was initially absent after repo setup.
+  2. Race condition: The user executed `npm run dev` in an interactive PowerShell session while the background `npm install` task was still actively writing and extracting packages into `frontend/node_modules\.bin\`. Under Windows file locking semantics and cmd.exe script-shell path resolution, executing the script prior to the completion of `.bin\vite.cmd` wrapper creation produces `ERROR_FILE_NOT_FOUND`.
+Contributing Factors: Background asynchronous installation without an explicit synchronous barrier before command invocation.
+Affected Scope: Local development server startup (`frontend/`).
+Regression Risk: LOW
+Related WBS: Task 10.4
+Related Artifacts: `.agents/artifacts/task_10_4/task_10_4_architect_analysis.md`
+Fix: Completed full `npm install` (134 packages audited, `node_modules\.bin\vite.cmd` confirmed present).
+Verification: Verified `npx vite --version` and `.\node_modules\.bin\vite --version` return `vite/6.4.3 win32-x64 node-v24.12.0`.
+Regression Verification: Tested binary execution directly via PowerShell.
+Resolution: Resolved.
+Remaining Risk: None.
+Resolved On: 2026-09-04
+
+
 
